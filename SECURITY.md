@@ -31,9 +31,9 @@ device plugin, Volcano, or another third-party component should normally be repo
 project. If you are unsure whether Noctaya contributes to the impact, report it privately here and
 we will help route it.
 
-The v0.3.0 gateway intentionally has no built-in authentication. Exposing it directly outside a
-trusted cluster boundary is unsupported; the absence of gateway authentication by itself is a
-documented alpha limitation, not a previously unknown vulnerability.
+The current alpha gateway intentionally has no built-in authentication. Exposing it directly
+outside a trusted cluster boundary is unsupported; the absence of gateway authentication by itself
+is a documented alpha limitation, not a previously unknown vulnerability.
 
 ## Reporting a vulnerability
 

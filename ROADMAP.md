@@ -2,10 +2,11 @@
 
 ## Project status
 
-Noctaya `v0.3.0` is an **alpha** Kubernetes control plane for declarative, scale-to-zero LLM
-serving on private clusters. The core lifecycle works end to end on real NVIDIA and Ascend
-accelerators, and the hardware-independent path runs in CI. The API remains
-`serving.noctaya.io/v1alpha1`, so breaking changes are possible.
+Noctaya `v0.4.0-alpha.1` is the first prerelease under the current project, repository, API, image,
+chart, and documentation coordinates. It packages the functional baseline completed in v0.3.0;
+the v0.4.0 production-hardening objectives below are not complete. The core lifecycle works end to
+end on real NVIDIA and Ascend accelerators, and the hardware-independent path runs in CI. The API
+remains `serving.noctaya.io/v1alpha1`, so breaking changes are possible.
 
 Noctaya is useful today for internal, development, and staging workloads where accelerator cost
 matters, traffic can tolerate a cold start, and brief disruption is acceptable. It is not yet
@@ -62,6 +63,16 @@ Volcano queue and quota tests.
 See the [NVIDIA A10](docs/nvidia/a10-validation.md),
 [Ascend 910B](docs/ascend/ascend-910b-validation.md), and
 [Ascend 310P](docs/ascend/ascend-310p-validation.md) reports for exact stacks and evidence.
+
+## v0.4.0-alpha.1 — identity migration prerelease
+
+- Publishes the operator, gateway, chart, documentation site, examples, and automation under the
+  Noctaya coordinates.
+- Moves the alpha API to `serving.noctaya.io/v1alpha1` and updates Kubernetes names, labels,
+  metrics, environment variables, and the queue endpoint consistently.
+- Treats migration from v0.3.0 as a reinstall because no CRD conversion webhook is provided.
+- Retains the v0.3.0 hardware reports as historical evidence. Repository and no-accelerator E2E
+  validation do not create a new physical-accelerator claim.
 
 ## v0.4.0 — internal production hardening
 
@@ -147,7 +158,7 @@ Priorities will be adjusted using deployment evidence, issue reports, and contri
 The project will favor a small, well-tested core, reproducible hardware reports, and a sustainable
 maintainer community over a broad speculative feature list.
 
-## Known limitations in v0.3.0
+## Current alpha limitations
 
 - Cold starts take seconds to minutes; latency-critical models should use `scaling.min: 1`.
 - The inference gateway has no built-in authentication and must remain behind a trusted boundary.

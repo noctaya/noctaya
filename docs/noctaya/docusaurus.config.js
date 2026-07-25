@@ -94,9 +94,9 @@ const config = {
       respectPrefersColorScheme: true,
     },
     announcementBar: {
-      id: 'alpha_status',
+      id: 'v040_alpha1_status',
       content:
-        'Noctaya v0.3.0 is alpha software. See the <a href="/ROADMAP">roadmap and current limitations</a>.',
+        'Noctaya v0.4.0-alpha.1 is a prerelease. Production-hardening work continues; see the <a href="/ROADMAP">roadmap and current limitations</a>.',
       backgroundColor: '#fff0f7',
       textColor: '#701a4b',
       isCloseable: true,

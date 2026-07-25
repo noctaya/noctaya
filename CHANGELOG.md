@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.4.0-alpha.1] - 2026-07-25
+
+This is the first Noctaya-branded prerelease. It publishes the v0.3.0 functional baseline under
+the current repository, API, image, chart, namespace, metrics, and documentation coordinates while
+v0.4.0 production-hardening work continues. It remains alpha software and is not production-ready.
+
 ### Changed
 - Adopted the Noctaya identity across the Go module, binaries, container images, Helm chart,
   Kubernetes object names, documentation website, examples, tests, and release automation.
@@ -13,6 +19,20 @@ All notable changes to this project are documented here. The format is based on
   `/noctaya/queue`, gateway metrics to the `noctaya_gateway_*` namespace, and gateway environment
   variables to the `NOCTAYA_*` prefix. Existing alpha resources require explicit migration; no
   conversion path is provided.
+
+### Migration
+- Treat this prerelease as a reinstall rather than an in-place upgrade from v0.3.0. Back up custom
+  resource specifications and model data, install the current chart, recreate resources with
+  `serving.noctaya.io/v1alpha1`, verify the new workloads, and only then remove the previous
+  installation.
+- Preserve the existing v0.3.0 tag and release as historical artifacts. The renamed chart and
+  images start at v0.4.0-alpha.1.
+
+### Verified
+- The renamed repository passed generation, build, unit and controller tests, lint, documentation
+  build, Helm and Kustomize rendering, and both disposable no-accelerator E2E scaler modes.
+- Physical accelerator claims remain tied to their recorded release, runtime, driver, device
+  plugin, and topology. This identity prerelease does not claim a new real-hardware validation run.
 
 ## [0.3.0] - 2026-07-19
 
@@ -220,7 +240,8 @@ Not production-ready (see [ROADMAP.md](ROADMAP.md)).
 ### Changed
 - Operator skips no-op `LLMService` status updates, avoiding optimistic-concurrency churn.
 
-[Unreleased]: https://github.com/noctaya/noctaya/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/noctaya/noctaya/compare/v0.4.0-alpha.1...HEAD
+[0.4.0-alpha.1]: https://github.com/noctaya/noctaya/compare/v0.3.0...v0.4.0-alpha.1
 [0.3.0]: https://github.com/noctaya/noctaya/compare/v0.3.0-rc.1...v0.3.0
 [0.3.0-rc.1]: https://github.com/noctaya/noctaya/compare/v0.2.0...v0.3.0-rc.1
 [0.2.0]: https://github.com/noctaya/noctaya/compare/v0.2.0-rc.1...v0.2.0

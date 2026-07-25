@@ -84,14 +84,13 @@ Before installing Noctaya, prepare:
 ### Install with Helm
 
 Install KEDA first by following its official [deployment guide](https://keda.sh/docs/2.20/deploy/)
-when autoscaling or scale-to-zero is required. Then install Noctaya from the repository:
+when autoscaling or scale-to-zero is required. Then install the Noctaya prerelease:
 
 ```bash
-git clone https://github.com/noctaya/noctaya.git
-cd noctaya
+NOCTAYA_VERSION=0.4.0-alpha.1
 
 helm upgrade --install noctaya \
-  ./charts/noctaya \
+  "https://github.com/noctaya/noctaya/releases/download/v${NOCTAYA_VERSION}/noctaya-${NOCTAYA_VERSION}.tgz" \
   --namespace noctaya-system \
   --create-namespace
 ```
@@ -106,8 +105,11 @@ kubectl get crd inferenceruntimes.serving.noctaya.io llmservices.serving.noctaya
 ### Deploy an example
 
 ```bash
+NOCTAYA_VERSION=0.4.0-alpha.1
+
 kubectl create namespace ai --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -n ai -k examples/nvidia/a10
+kubectl apply -n ai -k \
+  "https://github.com/noctaya/noctaya//examples/nvidia/a10?ref=v${NOCTAYA_VERSION}"
 
 kubectl get inferenceruntime vllm-nvidia-a10
 kubectl get llmservice,deployment,pod,service,pvc,job,scaledobject -n ai -w

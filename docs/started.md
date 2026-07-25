@@ -30,15 +30,13 @@ Use a dedicated development cluster while evaluating Noctaya.
 ## Install Noctaya
 
 When autoscaling or scale-to-zero is required, install KEDA first by following the official
-[KEDA 2.20 deployment guide](https://keda.sh/docs/2.20/deploy/). Then install the chart from the
-repository:
+[KEDA 2.20 deployment guide](https://keda.sh/docs/2.20/deploy/). Then install the versioned chart:
 
 ```bash
-git clone https://github.com/noctaya/noctaya.git
-cd noctaya
+NOCTAYA_VERSION=0.4.0-alpha.1
 
 helm upgrade --install noctaya \
-  ./charts/noctaya \
+  "https://github.com/noctaya/noctaya/releases/download/v${NOCTAYA_VERSION}/noctaya-${NOCTAYA_VERSION}.tgz" \
   --namespace noctaya-system \
   --create-namespace
 
@@ -53,8 +51,10 @@ The chart defaults to KEDA's polling `metrics-api` scaler. To push cold activati
 enable the ExternalScaler transport in the release chart:
 
 ```bash
+NOCTAYA_VERSION=0.4.0-alpha.1
+
 helm upgrade --install noctaya \
-  ./charts/noctaya \
+  "https://github.com/noctaya/noctaya/releases/download/v${NOCTAYA_VERSION}/noctaya-${NOCTAYA_VERSION}.tgz" \
   --namespace noctaya-system \
   --create-namespace \
   --set gateway.scalerMode=external-push \
@@ -75,11 +75,14 @@ coverage.
 
 For example, the NVIDIA A10 profile expects `nvidia.com/gpu`, the exact
 `nvidia.com/gpu.product=NVIDIA-A10` node label, a default dynamic StorageClass with at least 30 GiB
-available, and outbound access to ModelScope. From the current source checkout, apply it with:
+available, and outbound access to ModelScope. Apply the profile from the matching release tag:
 
 ```bash
+NOCTAYA_VERSION=0.4.0-alpha.1
+
 kubectl create namespace ai --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -n ai -k examples/nvidia/a10
+kubectl apply -n ai -k \
+  "https://github.com/noctaya/noctaya//examples/nvidia/a10?ref=v${NOCTAYA_VERSION}"
 
 kubectl get inferenceruntime vllm-nvidia-a10
 kubectl get llmservice -n ai
@@ -200,6 +203,16 @@ back to zero.
 
 ## Upgrade considerations
 
+### Migrating from v0.3.0
+
+The v0.4.0-alpha.1 identity and API-coordinate change is not an in-place upgrade. Kubernetes does
+not convert resources between API groups, and Noctaya does not provide a conversion webhook.
+
+Back up the existing custom resource specifications and any model data that must be retained.
+Install v0.4.0-alpha.1 into `noctaya-system`, recreate the resources from the current examples with
+`serving.noctaya.io/v1alpha1`, and validate the new service in a separate namespace before removing
+the previous installation. Do not delete an earlier CRD while it still contains resources.
+
 Upgrade with the next versioned chart asset:
 
 ```bash
@@ -229,7 +242,9 @@ Delete the service profile before removing the operator. The profile also contai
 runtime, so confirm that no other service uses it:
 
 ```bash
-kubectl delete -n ai -k examples/nvidia/a10
+NOCTAYA_VERSION=0.4.0-alpha.1
+kubectl delete -n ai -k \
+  "https://github.com/noctaya/noctaya//examples/nvidia/a10?ref=v${NOCTAYA_VERSION}"
 helm uninstall noctaya --namespace noctaya-system
 ```
 
