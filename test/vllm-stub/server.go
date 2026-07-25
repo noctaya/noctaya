@@ -27,6 +27,13 @@ import (
 	"time"
 )
 
+const (
+	completionID              = "stub-cmpl"
+	chatCompletionObject      = "chat.completion"
+	chatCompletionChunkObject = "chat.completion.chunk"
+	textCompletionObject      = "text_completion"
+)
+
 type Config struct {
 	StartupDelay time.Duration
 	TokenCount   int
@@ -56,14 +63,30 @@ func New(cfg Config) *Server {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
-	mux.HandleFunc("/v1/chat/completions", s.handleCompletions)
-	mux.HandleFunc("/v1/completions", s.handleCompletions)
+	mux.HandleFunc("/v1/chat/completions", func(w http.ResponseWriter, r *http.Request) {
+		s.handleCompletions(w, r, true)
+	})
+	mux.HandleFunc("/v1/completions", func(w http.ResponseWriter, r *http.Request) {
+		s.handleCompletions(w, r, false)
+	})
 	mux.HandleFunc("/metrics", s.handleMetrics)
 	mux.HandleFunc("/control", s.handleControl)
 	return mux
 }
 
-func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
+func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+	if r.Method == method {
+		return true
+	}
+	w.Header().Set("Allow", method)
+	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	return false
+}
+
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
 	s.mu.Lock()
 	m := s.metrics
 	s.mu.Unlock()
@@ -80,11 +103,17 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-// handleControl lets a test change the exported gauges without restarting the stub.
 func (s *Server) handleControl(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
 	var in vllmMetrics
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if in.Waiting < 0 || in.Running < 0 || in.KVCache < 0 || in.KVCache > 1 {
+		http.Error(w, "metrics must be non-negative and kv_cache must be between 0 and 1", http.StatusBadRequest)
 		return
 	}
 	s.mu.Lock()
@@ -99,7 +128,10 @@ func (s *Server) ready() bool {
 	return s.now().Sub(s.startedAt) >= s.cfg.StartupDelay
 }
 
-func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
 	if !s.ready() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
@@ -107,48 +139,84 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// completionRequest is the slice of the OpenAI request body the stub cares about.
 type completionRequest struct {
 	Stream bool `json:"stream"`
 }
 
-// tokens resolves the number of tokens for a request: a ?tokens= override (used by the
-// drain test to launch a deliberately long stream) else the configured default.
-func (s *Server) tokens(r *http.Request) int {
-	if v, err := strconv.Atoi(r.URL.Query().Get("tokens")); err == nil && v > 0 {
-		return v
+type completionPayload struct {
+	ID      string             `json:"id"`
+	Object  string             `json:"object"`
+	Choices []completionChoice `json:"choices"`
+}
+
+type completionChoice struct {
+	Index        int                `json:"index"`
+	Delta        *completionContent `json:"delta,omitempty"`
+	Message      *completionMessage `json:"message,omitempty"`
+	Text         string             `json:"text,omitempty"`
+	FinishReason string             `json:"finish_reason,omitempty"`
+}
+
+type completionContent struct {
+	Content string `json:"content"`
+}
+
+type completionMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+func (s *Server) tokens(r *http.Request) (int, error) {
+	value := r.URL.Query().Get("tokens")
+	if value != "" {
+		count, err := strconv.Atoi(value)
+		if err != nil || count < 1 {
+			return 0, fmt.Errorf("tokens must be a positive integer")
+		}
+		return count, nil
 	}
 	if s.cfg.TokenCount > 0 {
-		return s.cfg.TokenCount
+		return s.cfg.TokenCount, nil
 	}
-	return 1
+	return 1, nil
 }
 
-func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
-	var req completionRequest
-	_ = json.NewDecoder(r.Body).Decode(&req)
-	n := s.tokens(r)
-	if req.Stream {
-		s.streamTokens(w, r, n)
+func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request, chat bool) {
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
-	s.writeJSON(w, n)
+	var req completionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON request", http.StatusBadRequest)
+		return
+	}
+	n, err := s.tokens(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.Stream {
+		s.streamTokens(w, r, n, chat)
+		return
+	}
+	s.writeJSON(w, n, chat)
 }
 
-// streamTokens emits n OpenAI chat.completion.chunk SSE events then a [DONE] sentinel,
-// flushing each so the gateway streams them through as they arrive.
-func (s *Server) streamTokens(w http.ResponseWriter, r *http.Request, n int) {
+func (s *Server) streamTokens(w http.ResponseWriter, r *http.Request, n int, chat bool) {
 	h := w.Header()
 	h.Set("Content-Type", "text/event-stream")
 	h.Set("Cache-Control", "no-cache")
 	flusher, _ := w.(http.Flusher)
 	for i := range n {
-		delta := map[string]any{"content": fmt.Sprintf("tok%d ", i)}
-		chunk := map[string]any{
-			"id":      "stub-cmpl",
-			"object":  "chat.completion.chunk",
-			"choices": []map[string]any{{"index": 0, "delta": delta}},
+		choice := completionChoice{Index: 0}
+		object := textCompletionObject
+		if chat {
+			object = chatCompletionChunkObject
+			choice.Delta = &completionContent{Content: fmt.Sprintf("tok%d ", i)}
+		} else {
+			choice.Text = fmt.Sprintf("tok%d ", i)
 		}
+		chunk := completionPayload{ID: completionID, Object: object, Choices: []completionChoice{choice}}
 		b, _ := json.Marshal(chunk)
 		if _, err := fmt.Fprintf(w, "data: %s\n\n", b); err != nil {
 			return
@@ -156,10 +224,20 @@ func (s *Server) streamTokens(w http.ResponseWriter, r *http.Request, n int) {
 		if flusher != nil {
 			flusher.Flush()
 		}
+		if s.cfg.TokenDelay <= 0 {
+			continue
+		}
+		timer := time.NewTimer(s.cfg.TokenDelay)
 		select {
 		case <-r.Context().Done():
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
 			return
-		case <-time.After(s.cfg.TokenDelay):
+		case <-timer.C:
 		}
 	}
 	_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
@@ -168,16 +246,21 @@ func (s *Server) streamTokens(w http.ResponseWriter, r *http.Request, n int) {
 	}
 }
 
-func (s *Server) writeJSON(w http.ResponseWriter, n int) {
+func (s *Server) writeJSON(w http.ResponseWriter, n int, chat bool) {
 	var content strings.Builder
 	for i := range n {
 		fmt.Fprintf(&content, "tok%d ", i)
 	}
-	message := map[string]any{"role": "assistant", "content": content.String()}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"id":      "stub-cmpl",
-		"object":  "chat.completion",
-		"choices": []map[string]any{{"index": 0, "message": message, "finish_reason": "stop"}},
+	choice := completionChoice{Index: 0, FinishReason: "stop"}
+	object := textCompletionObject
+	if chat {
+		object = chatCompletionObject
+		choice.Message = &completionMessage{Role: "assistant", Content: content.String()}
+	} else {
+		choice.Text = content.String()
+	}
+	_ = json.NewEncoder(w).Encode(completionPayload{
+		ID: completionID, Object: object, Choices: []completionChoice{choice},
 	})
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -26,20 +27,30 @@ import (
 
 const defaultTokenDelay = 50 * time.Millisecond
 
-// ConfigFromEnv builds the stub config from STUB_* environment variables, which the
-// e2e test sets on the stub-backed Deployment to shape cold-start and streaming timing.
-func ConfigFromEnv() Config {
+func ConfigFromEnv() (Config, error) {
 	cfg := Config{TokenDelay: defaultTokenDelay}
-	if d, err := time.ParseDuration(os.Getenv("STUB_STARTUP_DELAY")); err == nil {
-		cfg.StartupDelay = d
+	if value := os.Getenv("STUB_STARTUP_DELAY"); value != "" {
+		delay, err := time.ParseDuration(value)
+		if err != nil || delay < 0 {
+			return Config{}, fmt.Errorf("STUB_STARTUP_DELAY must be a non-negative duration")
+		}
+		cfg.StartupDelay = delay
 	}
-	if n, err := strconv.Atoi(os.Getenv("STUB_TOKEN_COUNT")); err == nil {
-		cfg.TokenCount = n
+	if value := os.Getenv("STUB_TOKEN_COUNT"); value != "" {
+		count, err := strconv.Atoi(value)
+		if err != nil || count < 1 {
+			return Config{}, fmt.Errorf("STUB_TOKEN_COUNT must be a positive integer")
+		}
+		cfg.TokenCount = count
 	}
-	if d, err := time.ParseDuration(os.Getenv("STUB_TOKEN_DELAY")); err == nil {
-		cfg.TokenDelay = d
+	if value := os.Getenv("STUB_TOKEN_DELAY"); value != "" {
+		delay, err := time.ParseDuration(value)
+		if err != nil || delay < 0 {
+			return Config{}, fmt.Errorf("STUB_TOKEN_DELAY must be a non-negative duration")
+		}
+		cfg.TokenDelay = delay
 	}
-	return cfg
+	return cfg, nil
 }
 
 func main() {
@@ -47,7 +58,11 @@ func main() {
 	if addr == "" {
 		addr = ":8000"
 	}
-	s := New(ConfigFromEnv())
+	cfg, err := ConfigFromEnv()
+	if err != nil {
+		log.Fatalf("Invalid stub configuration: %v", err)
+	}
+	s := New(cfg)
 	log.Printf("vllm-stub listening on %s (startupDelay=%v tokens=%d)", addr, s.cfg.StartupDelay, s.cfg.TokenCount)
 	if err := http.ListenAndServe(addr, s.Handler()); err != nil { //nolint:gosec // G114: test-only stub
 		log.Fatalf("vllm-stub server failed: %v", err)
