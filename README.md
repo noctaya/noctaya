@@ -29,16 +29,65 @@ image, device-plugin resource, scheduling constraints, health probes, and lifecy
 separates portable serving intent from cluster- and vendor-specific configuration.
 
 From those two resources, Noctaya reconciles the backend and gateway workloads, Services, optional
-model cache and prewarm Job, and KEDA autoscaling resources when KEDA is installed. Noctaya runs
-existing inference engines such as vLLM and integrates with device plugins and schedulers; it does
-not implement inference kernels, accelerator runtimes, or fleet-level serving behavior.
+model cache and prewarm Job, and KEDA autoscaling resources. Noctaya runs existing inference
+engines such as vLLM and integrates with device plugins and schedulers; it does not implement
+inference kernels, accelerator runtimes, or fleet-level serving behavior.
+
+## Architecture
+
+An `LLMService` consumes a reusable `InferenceRuntime`. The Noctaya operator reconciles the gateway,
+model backend, cache, and KEDA scaling resource, while KEDA remains independently installed and
+owns the backend replica count.
+
+```mermaid
+flowchart LR
+  client([Inference client])
+
+  subgraph control["Noctaya control plane"]
+    direction TB
+    config["LLMService<br/>InferenceRuntime"]
+    operator["Noctaya operator"]
+    scaled["KEDA ScaledObject"]
+    config --> operator --> scaled
+  end
+
+  subgraph data["Per-model data plane"]
+    direction TB
+    gateway["Always-on gateway"]
+    backend["Model backend<br/>0..N"]
+    cache[("Optional model cache")]
+    gateway -->|Forward when ready| backend
+    cache -.->|Load weights| backend
+  end
+
+  keda["KEDA<br/>independently installed"]
+
+  client -->|OpenAI API| gateway
+  operator -.->|Reconcile| gateway
+  operator -.-> backend
+  operator -.-> cache
+  gateway -.->|Queue demand| keda
+  scaled --> keda
+  keda -->|Scale replicas| backend
+
+  classDef actor fill:#f8fafc,stroke:#64748b,color:#0f172a,stroke-width:1.5px;
+  classDef controlNode fill:#f3e8ff,stroke:#9333ea,color:#3b0764,stroke-width:1.5px;
+  classDef dataNode fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e,stroke-width:1.5px;
+  classDef external fill:#ffedd5,stroke:#ea580c,color:#7c2d12,stroke-width:1.5px;
+  class client actor;
+  class config,operator,scaled controlNode;
+  class gateway,backend,cache dataNode;
+  class keda external;
+  style control fill:#faf5ff,stroke:#d8b4fe,stroke-width:1px
+  style data fill:#f0f9ff,stroke:#bae6fd,stroke-width:1px
+```
+
+See the [architecture guide](docs/architecture.md) for the complete reconciliation and
+scale-to-zero lifecycle.
 
 ## Demo
 
-https://github.com/user-attachments/assets/2d217dad-0280-4509-8793-dfd13ce0cdfa
-
-The [operational walkthrough](docs/demo.md) shows Kthena keeping a hot model ready while a request
-activates a Noctaya-managed long-tail model from zero and lets it return to zero afterward.
+https://github.com/user-attachments/assets/bd55e9a5-c1ce-4b06-9e82-af7a627c53b8
 
 ## Why Noctaya
 
@@ -48,9 +97,8 @@ activates a Noctaya-managed long-tail model from zero and lets it return to zero
   scaling intent. Cluster administrators define images, device resources, scheduling, and probes.
 - **Thin vendor integration.** Most hardware differences are declarative runtime data; small
   NVIDIA and Ascend adapters translate the remaining Kubernetes-specific behavior.
-- **Optional integrations stay optional.** KEDA is required for autoscaling and scale-to-zero, but
-  basic reconciliation continues without it. Prometheus and Grafana are independent, opt-in
-  integrations.
+- **Dependencies remain independently managed.** KEDA is required for the scaling lifecycle but is
+  installed separately. Prometheus and Grafana remain independent, opt-in integrations.
 
 | Layer | Owner | Noctaya's role |
 |---|---|---|
@@ -59,40 +107,36 @@ activates a Noctaya-managed long-tail model from zero and lets it return to zero
 | Fleet routing and datacenter-scale serving | Kthena, AIBrix, KServe, llm-d, and similar platforms | Stays outside this scope; Noctaya can coexist as a smaller scale-to-zero control plane. |
 | Model lifecycle and scale-to-zero | Noctaya | Reconciles serving workloads, caching, gateways, and KEDA autoscaling. |
 
-### Noctaya and Kthena
+### Coexisting with serving platforms
 
-[Kthena](https://github.com/volcano-sh/kthena), a [Volcano](https://volcano.sh/) sub-project, is a
-Kubernetes-native AI serving **platform**: multi-model routing, KV-cache-aware scheduling,
-prefill/decode disaggregation, and fleet-scale autoscaling, with first-class NPU support. If you run
-a serious multi-model serving estate, **use Kthena — it's excellent.** Noctaya lives at the other end
-of the same axis: a handful of occasionally-used models on a handful of cards, where you want the
-smallest possible footprint — one manifest, KEDA, done. The two compose naturally on one cluster:
-**hot, high-traffic models on Kthena; the long tail scaled to zero with Noctaya**, on the same
-(Volcano-schedulable) silicon.
+Noctaya can share a Kubernetes cluster with broader AI serving platforms when each controller owns
+separate model workloads and shared infrastructure remains independently managed. Device plugins,
+schedulers, storage, ingress, and monitoring can be shared, but two controllers should never own
+the same Deployment or model endpoint.
+
+For example, [Kthena](https://github.com/volcano-sh/kthena) can manage continuously active,
+fleet-scale workloads while Noctaya manages bursty or long-tail models that should scale to zero.
 
 ## Quick Start
 
 ### Prerequisites
 
-Before installing Noctaya, prepare:
+Before deploying a model, prepare:
 
 - Kubernetes >= 1.30;
-- Helm > 3;
+- Helm >= 3.0;
 - a compatible accelerator driver and device plugin; and
 - sufficient model storage and access to the selected image registry and model source.
 
 ### Install with Helm
 
-Install KEDA first by following its official [deployment guide](https://keda.sh/docs/2.20/deploy/)
-when autoscaling or scale-to-zero is required. Then install the Noctaya prerelease:
+Install Noctaya from the checked-out Helm chart:
 
 ```bash
-NOCTAYA_VERSION=0.4.0-alpha.1
+git clone https://github.com/noctaya/noctaya.git
+cd noctaya
 
-helm upgrade --install noctaya \
-  "https://github.com/noctaya/noctaya/releases/download/v${NOCTAYA_VERSION}/noctaya-${NOCTAYA_VERSION}.tgz" \
-  --namespace noctaya-system \
-  --create-namespace
+helm install noctaya ./charts/noctaya --namespace noctaya-system --create-namespace
 ```
 
 Verify the operator and CRDs:
@@ -102,44 +146,7 @@ kubectl rollout status deployment/noctaya-controller-manager -n noctaya-system
 kubectl get crd inferenceruntimes.serving.noctaya.io llmservices.serving.noctaya.io
 ```
 
-### Deploy an example
-
-```bash
-NOCTAYA_VERSION=0.4.0-alpha.1
-
-kubectl create namespace ai --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -n ai -k \
-  "https://github.com/noctaya/noctaya//examples/nvidia/a10?ref=v${NOCTAYA_VERSION}"
-
-kubectl get inferenceruntime vllm-nvidia-a10
-kubectl get llmservice,deployment,pod,service,pvc,job,scaledobject -n ai -w
-```
-
-The profile installs a cluster-scoped runtime and a namespaced `LLMService`. Its prewarm Job first
-downloads the model; the first request then activates the backend from zero. See [LLMService walkthrough](docs/started.md#understand-the-llmservice)
-
-For other devices, select a profile from [`examples/`](examples). To exercise the full lifecycle
-without an accelerator, use the [no-GPU development guide](docs/no-gpu.md).
-
-## Architecture
-
-One `LLMService` consumes one cluster-scoped `InferenceRuntime` and reconciles to a backend
-Deployment and Service, a gateway Deployment and Service, optional cache and prewarm resources,
-and a KEDA `ScaledObject` when KEDA is installed.
-
-```mermaid
-flowchart LR
-  client([Client]) -->|OpenAI API| gateway[Noctaya gateway]
-  gateway --> backend[Model backend 0..N]
-  keda[KEDA] -->|Push activation or poll queue| gateway
-  keda -->|Scale| backend
-  backend -.-> cache[(Model cache)]
-```
-
-The gateway exposes the demand signal, buffers requests during cold start, and forwards them once
-the model is ready. KEDA polling is the compatibility default; an opt-in ExternalScaler removes the
-poll interval from cold activation. See the [architecture guide](docs/architecture.md) for the full
-data flow and gateway-replica constraint.
+See [Getting started](docs/getting-started.md), To run the same lifecycle without an accelerator, use the [no-GPU development guide](docs/no-gpu.md).
 
 ## Contributing
 
