@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
+	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
 )
 
 const (
@@ -71,7 +71,7 @@ func planCache(svc *servingv1alpha1.LLMService) (cacheArtifacts, error) {
 
 	case "HostPath":
 		hostType := corev1.HostPathDirectoryOrCreate
-		path := fmt.Sprintf("/var/lib/hearth/cache/%s-%s", svc.Namespace, svc.Name)
+		path := fmt.Sprintf("/var/lib/noctaya/cache/%s-%s", svc.Namespace, svc.Name)
 		return cacheArtifacts{
 			volume: &corev1.Volume{Name: cacheVolumeName, VolumeSource: corev1.VolumeSource{
 				HostPath: &corev1.HostPathVolumeSource{Path: path, Type: &hostType},

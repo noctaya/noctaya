@@ -2,16 +2,16 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ include "hearth.serviceAccountName" . }}
+  name: {{ include "noctaya.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
-  labels: {{- include "hearth.labels" . | nindent 4 }}
+  labels: {{- include "noctaya.labels" . | nindent 4 }}
 {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "hearth.fullname" . }}-manager-role
-  labels: {{- include "hearth.labels" . | nindent 4 }}
+  name: {{ include "noctaya.fullname" . }}-manager-role
+  labels: {{- include "noctaya.labels" . | nindent 4 }}
 rules:
 - apiGroups: [""]
   resources: [persistentvolumeclaims, services]
@@ -22,38 +22,38 @@ rules:
 - apiGroups: [batch]
   resources: [jobs]
   verbs: [create, delete, get, list, patch, update, watch]
-# Optional autoscaling integration: Hearth degrades gracefully if this CRD is absent.
+# Optional autoscaling integration: Noctaya degrades gracefully if this CRD is absent.
 - apiGroups: [keda.sh]
   resources: [scaledobjects]
   verbs: [create, delete, get, list, patch, update, watch]
-- apiGroups: [serving.hearth.dev]
+- apiGroups: [serving.noctaya.io]
   resources: [inferenceruntimes, llmservices]
   verbs: [get, list, watch]
-- apiGroups: [serving.hearth.dev]
+- apiGroups: [serving.noctaya.io]
   resources: [llmservices/status]
   verbs: [get, patch, update]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "hearth.fullname" . }}-manager-rolebinding
-  labels: {{- include "hearth.labels" . | nindent 4 }}
+  name: {{ include "noctaya.fullname" . }}-manager-rolebinding
+  labels: {{- include "noctaya.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "hearth.fullname" . }}-manager-role
+  name: {{ include "noctaya.fullname" . }}-manager-role
 subjects:
 - kind: ServiceAccount
-  name: {{ include "hearth.serviceAccountName" . }}
+  name: {{ include "noctaya.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- if .Values.operator.leaderElect }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: {{ include "hearth.fullname" . }}-leader-election
+  name: {{ include "noctaya.fullname" . }}-leader-election
   namespace: {{ .Release.Namespace }}
-  labels: {{- include "hearth.labels" . | nindent 4 }}
+  labels: {{- include "noctaya.labels" . | nindent 4 }}
 rules:
 - apiGroups: [""]
   resources: [configmaps]
@@ -68,15 +68,15 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: {{ include "hearth.fullname" . }}-leader-election
+  name: {{ include "noctaya.fullname" . }}-leader-election
   namespace: {{ .Release.Namespace }}
-  labels: {{- include "hearth.labels" . | nindent 4 }}
+  labels: {{- include "noctaya.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: {{ include "hearth.fullname" . }}-leader-election
+  name: {{ include "noctaya.fullname" . }}-leader-election
 subjects:
 - kind: ServiceAccount
-  name: {{ include "hearth.serviceAccountName" . }}
+  name: {{ include "noctaya.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}

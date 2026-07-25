@@ -1,4 +1,4 @@
-# Developing Hearth without an accelerator
+# Developing Noctaya without an accelerator
 
 You can build, test, and exercise the operator, gateway, and scale-to-zero lifecycle on a CPU-only
 workstation. The `vllm-stub` replaces the inference process for these tests. Real accelerator-backed
@@ -55,52 +55,34 @@ make docker-build-stub CONTAINER_TOOL=podman
 from an archive instead, and tell Kind to use Podman:
 
 ```bash
-podman save hearth.dev/vllm-stub:e2e -o /tmp/stub.tar
+podman save noctaya.io/vllm-stub:e2e -o /tmp/stub.tar
 KIND_EXPERIMENTAL_PROVIDER=podman kind load image-archive /tmp/stub.tar --name <cluster>
 ```
 
 ## Full scale-to-zero loop on Kind
 
 The end-to-end `0→1→N→0` loop (idle → cold request wakes the backend → autoscale → drain back to
-zero, plus reject-mode 503) runs on Kind without an accelerator, in `test/scaletozero/`. It backs each
-`LLMService` with the stub, advertises a fake accelerator resource on the node (via the node-status
-API, so no device plugin), and runs the operator out-of-cluster.
+zero, plus reject-mode 503) runs on Kind without an accelerator in `test/scale-to-zero/`. It backs
+each `LLMService` with the stub and advertises a fake accelerator resource through the node-status
+API, so no device plugin is required.
 
-The suite mutates an existing cluster and expects both a Kind cluster named `kind` and the current
-kube-context to be `kind-kind`. Use a dedicated disposable cluster. For Podman, export the two
-variables before creating it; Docker users can omit them.
+The runner creates an isolated Kind cluster, writes a dedicated kubeconfig, installs the pinned
+KEDA release, builds and loads the local images, runs the suite, and cleans up afterward. It refuses
+to reuse an existing cluster or kubeconfig.
 
 ```bash
 # Podman only:
 # export CONTAINER_TOOL=podman
 # export KIND_EXPERIMENTAL_PROVIDER=podman
-
-kind create cluster --name kind --wait 120s
-test "$(kubectl config current-context)" = "kind-kind"
 ```
 
-Install KEDA by following the official
-[KEDA 2.20 deployment guide](https://keda.sh/docs/2.20/deploy/), then confirm its CRD is available:
+CI and the local runner pin KEDA `2.20.1`. Run both scaler modes:
 
 ```bash
-kubectl get crd scaledobjects.keda.sh
-```
-
-CI pins KEDA `2.20.1` in `.github/workflows/test-scale-e2e.yml`. Then run both scaler modes; each
-command builds and loads the stub and gateway images before starting the suite:
-
-```bash
-make test-scale-e2e
-make test-scale-e2e SCALE_SCALER_MODE=external-push
+make test-e2e
+make test-e2e E2E_SCALER_MODE=external-push
 ```
 
 The first command verifies the default metrics API polling path; the second verifies the internal
 external-push scaler Service, KEDA stream, activation, scale-out, drain, and return to zero. The
-suite installs Hearth's CRDs but expects KEDA to be present and fails fast when it is not. It does
-not delete the cluster afterward:
-
-```bash
-kind delete cluster --name kind
-```
-
-CI runs both modes on every PR via `.github/workflows/test-scale-e2e.yml`.
+workflow matrix runs both modes on every pull request through `.github/workflows/test-e2e.yml`.

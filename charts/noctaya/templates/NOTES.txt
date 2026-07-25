@@ -1,16 +1,16 @@
-Hearth release "{{ .Release.Name }}" ({{ .Chart.AppVersion }}) is installed in namespace "{{ .Release.Namespace }}".
+Noctaya release "{{ .Release.Name }}" ({{ .Chart.AppVersion }}) is installed in namespace "{{ .Release.Namespace }}".
 
 Verify the operator deployment:
-  kubectl get deploy -n {{ .Release.Namespace }} {{ include "hearth.fullname" . }}-controller-manager
+  kubectl get deploy -n {{ .Release.Namespace }} {{ include "noctaya.fullname" . }}-controller-manager
 
 The operator deploys a data-plane gateway per LLMService using:
-  {{ include "hearth.gatewayImage" . }}
+  {{ include "noctaya.gatewayImage" . }}
 
-Prerequisite for scale-to-zero (Hearth degrades gracefully without it):
+Prerequisite for scale-to-zero (Noctaya degrades gracefully without it):
   - KEDA (required for scale-to-zero / autoscaling):
       https://keda.sh/docs/2.20/deploy/
 
-Prometheus and Grafana are independent, opt-in integrations. Hearth does not
+Prometheus and Grafana are independent, opt-in integrations. Noctaya does not
 create their resources; see examples/observability in the project repository.
 
 Try the physically validated NVIDIA A10 profile (requires an NVIDIA device
@@ -19,7 +19,7 @@ at least 30 GiB available):
   1. Create a workload namespace:
        kubectl create namespace ai --dry-run=client -o yaml | kubectl apply -f -
   2. Deploy the device profile:
-       kubectl apply -n ai -k "https://github.com/hearth-project/hearth//examples/nvidia/a10?ref=v{{ .Chart.AppVersion }}"
+       kubectl apply -n ai -k "https://github.com/noctaya/noctaya//examples/nvidia/a10?ref=v{{ .Chart.AppVersion }}"
   3. Watch it:
        kubectl get llmservice -n ai -w
 

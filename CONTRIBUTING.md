@@ -1,16 +1,16 @@
-# Contributing to Hearth
+# Contributing to Noctaya
 
-Thank you for helping improve Hearth. The project is still alpha, so focused bug fixes, tests,
+Thank you for helping improve Noctaya. The project is still alpha, so focused bug fixes, tests,
 documentation, hardware evidence, and small design improvements are especially valuable.
 
 By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md). Contributions are
-accepted under the [Apache-2.0 license](https://github.com/hearth-project/hearth/blob/main/LICENSE)
+accepted under the [Apache-2.0 license](https://github.com/noctaya/noctaya/blob/main/LICENSE)
 and must include a
 [Developer Certificate of Origin](https://developercertificate.org/) (DCO) sign-off.
 
 ## Before you start
 
-- Read the [architecture](docs/architecture.md) to understand Hearth's component boundary.
+- Read the [architecture](docs/architecture.md) to understand Noctaya's component boundary.
 - Check the [roadmap](ROADMAP.md), existing issues, and pull requests before starting overlapping
   work.
 - Open an issue before changing an API, adding a dependency or backend vendor, moving component
@@ -23,12 +23,12 @@ contributions.
 
 ## Project boundary
 
-Hearth owns the Kubernetes orchestration and lifecycle layer for scale-to-zero LLM serving. This
+Noctaya owns the Kubernetes orchestration and lifecycle layer for scale-to-zero LLM serving. This
 includes declarative workloads, runtime selection, model caching, health, accelerator scheduling
 translation, request-aware activation, and stable metrics surfaces.
 
 Keep inference kernels, vendor runtime behavior, device plugins, schedulers, fleet routing, and
-monitoring lifecycle in their respective upstream projects. Vendor adapters in Hearth should stay
+monitoring lifecycle in their respective upstream projects. Vendor adapters in Noctaya should stay
 thin and translate only the Kubernetes details required by an `InferenceRuntime`.
 
 ## Development environment
@@ -36,7 +36,7 @@ thin and translate only the Kubernetes details required by an `InferenceRuntime`
 The basic development loop requires:
 
 - Go at the version declared by
-  [`go.mod`](https://github.com/hearth-project/hearth/blob/main/go.mod) (currently Go 1.26);
+  [`go.mod`](https://github.com/noctaya/noctaya/blob/main/go.mod) (currently Go 1.26);
 - Git and `make`;
 - Docker, or Podman through `CONTAINER_TOOL=podman`, for image and scale-to-zero tests; and
 - `kubectl`, Kind, and Helm for cluster-based tests.
@@ -44,8 +44,8 @@ The basic development loop requires:
 Clone the repository and run the standard checks:
 
 ```bash
-git clone https://github.com/hearth-project/hearth.git
-cd hearth
+git clone https://github.com/noctaya/noctaya.git
+cd noctaya
 make build
 make test
 make lint
@@ -74,14 +74,14 @@ already configured.
 ### Develop without an accelerator
 
 Most behavior can be developed without a GPU or NPU. The CPU vLLM stub covers request handling and
-the complete scale-to-zero lifecycle; see [Developing Hearth without a GPU](docs/no-gpu.md).
+the complete scale-to-zero lifecycle; see [Developing Noctaya without a GPU](docs/no-gpu.md).
 
 To run the controller manually, use a disposable cluster and verify the current context before
 installing anything:
 
 ```bash
-kind create cluster --name hearth-dev
-kubectl config current-context  # must report kind-hearth-dev
+kind create cluster --name noctaya-dev
+kubectl config current-context  # must report kind-noctaya-dev
 make install
 make run
 ```
@@ -93,21 +93,21 @@ to a laptop merely to inspect its manifests. Render it locally instead:
 kubectl kustomize examples/nvidia/a100 >/dev/null
 ```
 
-Use the no-GPU guide and `test/scaletozero/` suite when you need the operator, gateway, KEDA, and a
+Use the no-GPU guide and `test/scale-to-zero/` suite when you need the operator, gateway, KEDA, and a
 schedulable CPU backend together. Rendering a workload successfully is not hardware validation.
 
 ### End-to-end tests
 
-The two E2E suites have different cluster lifecycles:
+The E2E runner supports both scaler modes:
 
 | Check | Command | Environment |
 |---|---|---|
-| Manager deployment and metrics | `make test-e2e` | Creates the isolated Kind cluster `hearth-test-e2e` and removes it after success |
-| Default scale-to-zero path | `make test-scale-e2e` | Uses an existing dedicated Kind cluster named `kind` with KEDA installed |
-| External-push path | `make test-scale-e2e SCALE_SCALER_MODE=external-push` | Uses the same dedicated Kind and KEDA setup |
+| Default scale-to-zero path | `make test-e2e` | Creates an isolated Kind cluster, installs KEDA, runs the lifecycle, and cleans up |
+| External-push path | `make test-e2e E2E_SCALER_MODE=external-push` | Creates the same isolated environment and exercises the streaming ExternalScaler |
 
-Never point an E2E command at a development, staging, or production cluster. If `make test-e2e` is
-interrupted or fails before cleanup, remove its cluster with `make cleanup-test-e2e`.
+The runner uses a dedicated kubeconfig, refuses to reuse an existing cluster, and cleans up on
+success, failure, or interruption. Never point E2E tooling at development, staging, or production
+clusters.
 
 ## Project layout
 
@@ -119,10 +119,10 @@ interrupted or fails before cleanup, remove its cluster with `make cleanup-test-
 | `internal/gateway/` | Request admission, cold-start activation, proxying, draining, and metrics |
 | `internal/model/` | Model URI resolution |
 | `config/` | Kustomize deployment, generated CRDs, and generated RBAC |
-| `charts/hearth/` | Manually maintained Helm chart and synchronized CRDs |
+| `charts/noctaya/` | Manually maintained Helm chart and synchronized CRDs |
 | `examples/<vendor>/<device>/` | Independently deployable hardware profiles |
 | `examples/observability/` | Optional Prometheus and Grafana integration |
-| `docs/hearth/` | Docusaurus presentation and GitHub Pages deployment |
+| `docs/noctaya/` | Docusaurus presentation and GitHub Pages deployment |
 | `test/` | Kind E2E suites and the CPU vLLM stub |
 
 ## Requirements by change type
@@ -164,7 +164,7 @@ Adding a vendor normally requires all of the following:
 6. Regenerated manifests, deepcopy code, and Helm CRDs.
 
 Do not claim accelerator support from unit tests or manifests alone. A hardware claim must record
-the device, topology, driver and device-plugin versions, runtime image, Hearth version, commands,
+the device, topology, driver and device-plugin versions, runtime image, Noctaya version, commands,
 and observed results. Use the [NVIDIA A10 report](docs/nvidia/a10-validation.md) and
 [Ascend validation guide](docs/ascend/ascend-validation.md) as templates.
 
@@ -181,8 +181,8 @@ RBAC, manager flags, image settings, and deployment behavior may require changes
 Validate chart changes with:
 
 ```bash
-helm lint charts/hearth
-helm template hearth charts/hearth --namespace hearth-system >/dev/null
+helm lint charts/noctaya
+helm template noctaya charts/noctaya --namespace noctaya-system >/dev/null
 ```
 
 The operator and gateway use separate images. Build them with `make docker-build IMG=...` and
@@ -195,11 +195,11 @@ Keep examples independently deployable and device-specific. Prefer linking to a 
 instead of duplicating long procedures.
 
 Markdown under `docs/`, `examples/README.md`, and the root project documents is rendered directly
-by the Docusaurus application under `docs/hearth/`; do not copy it into the site directory. To
+by the Docusaurus application under `docs/noctaya/`; do not copy it into the site directory. To
 preview documentation changes, install Node.js 20 or newer and run:
 
 ```bash
-cd docs/hearth
+cd docs/noctaya
 npm ci
 npm start
 ```
@@ -214,7 +214,7 @@ Do not hand-edit these files:
 - `api/v1alpha1/zz_generated.deepcopy.go`;
 - `config/crd/bases/*.yaml`;
 - `config/rbac/role.yaml`;
-- `charts/hearth/crds/*.yaml`;
+- `charts/noctaya/crds/*.yaml`;
 - `internal/gateway/externalscaler/*.pb.go`; or
 - `PROJECT`.
 

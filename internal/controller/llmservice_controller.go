@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -37,13 +37,13 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
-	"github.com/hearth-project/hearth/internal/backend"
-	"github.com/hearth-project/hearth/internal/backend/registry"
-	"github.com/hearth-project/hearth/internal/model"
+	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
+	"github.com/noctaya/noctaya/internal/backend"
+	"github.com/noctaya/noctaya/internal/backend/registry"
+	"github.com/noctaya/noctaya/internal/model"
 )
 
-const fieldOwner = client.FieldOwner("hearth-operator")
+const fieldOwner = client.FieldOwner("noctaya-operator")
 
 type LLMServiceReconciler struct {
 	client.Client
@@ -58,9 +58,9 @@ type LLMServiceReconciler struct {
 	ScalerMode backend.ScalerMode
 }
 
-// +kubebuilder:rbac:groups=serving.hearth.dev,resources=llmservices,verbs=get;list;watch
-// +kubebuilder:rbac:groups=serving.hearth.dev,resources=llmservices/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=serving.hearth.dev,resources=inferenceruntimes,verbs=get;list;watch
+// +kubebuilder:rbac:groups=serving.noctaya.io,resources=llmservices,verbs=get;list;watch
+// +kubebuilder:rbac:groups=serving.noctaya.io,resources=llmservices/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=serving.noctaya.io,resources=inferenceruntimes,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
@@ -209,7 +209,7 @@ func pickByVendor(items []servingv1alpha1.InferenceRuntime, vendors []string) (*
 }
 
 // apply server-side applies an owned object so the API server keeps ownership of fields
-// Hearth does not set (defaults, clusterIP, etc.), giving idempotent reconciliation.
+// Noctaya does not set (defaults, clusterIP, etc.), giving idempotent reconciliation.
 func (r *LLMServiceReconciler) apply(ctx context.Context, owner *servingv1alpha1.LLMService, obj client.Object) error {
 	if err := controllerutil.SetControllerReference(owner, obj, r.Scheme); err != nil {
 		return err
@@ -223,7 +223,7 @@ func (r *LLMServiceReconciler) apply(ctx context.Context, owner *servingv1alpha1
 }
 
 // applyOptional SSA-applies an unstructured dependency. If its CRD is absent, it logs
-// skipMsg and continues so Hearth can run without the optional integration installed.
+// skipMsg and continues so Noctaya can run without the optional integration installed.
 func (r *LLMServiceReconciler) applyOptional(ctx context.Context, owner *servingv1alpha1.LLMService, obj *unstructured.Unstructured, skipMsg string) error {
 	if err := controllerutil.SetControllerReference(owner, obj, r.Scheme); err != nil {
 		return err

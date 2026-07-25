@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.21.0
-  name: inferenceruntimes.serving.hearth.dev
+  name: inferenceruntimes.serving.noctaya.io
 spec:
-  group: serving.hearth.dev
+  group: serving.noctaya.io
   names:
     kind: InferenceRuntime
     listKind: InferenceRuntimeList
@@ -806,7 +806,7 @@ spec:
                     type: boolean
                   terminationGracePeriodSeconds:
                     description: |-
-                      terminationGracePeriodSeconds is the base pod shutdown budget; Hearth widens
+                      terminationGracePeriodSeconds is the base pod shutdown budget; Noctaya widens
                       it when the configured drain timeout requires more time.
                     format: int64
                     minimum: 1
@@ -815,7 +815,7 @@ spec:
               metrics:
                 description: |-
                   metrics describes optional runtime telemetry for external integrations.
-                  Hearth autoscaling uses the gateway queue and does not consume these fields.
+                  Noctaya autoscaling uses the gateway queue and does not consume these fields.
                 properties:
                   kvCacheUtil:
                     description: kvCacheUtil is the runtime's KV-cache utilization

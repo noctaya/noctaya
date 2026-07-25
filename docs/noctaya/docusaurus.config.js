@@ -2,13 +2,13 @@ const {themes: prismThemes} = require('prism-react-renderer');
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: 'Hearth',
+  title: 'Noctaya',
   tagline: 'Scale-to-zero LLM serving for private Kubernetes clusters',
 
-  url: 'https://hearth-project.dev',
+  url: 'https://noctaya.io',
   baseUrl: '/',
-  organizationName: 'hearth-project',
-  projectName: 'hearth',
+  organizationName: 'noctaya',
+  projectName: 'noctaya',
   trailingSlash: false,
 
   future: {
@@ -60,11 +60,11 @@ const config = {
             'ROADMAP.md',
             'SECURITY.md',
           ],
-          exclude: ['docs/hearth/**'],
+          exclude: ['docs/noctaya/**'],
           routeBasePath: '/',
           sidebarPath: require.resolve('./sidebars.js'),
           editUrl: ({docPath}) =>
-            `https://github.com/hearth-project/hearth/edit/main/${docPath}`,
+            `https://github.com/noctaya/noctaya/edit/main/${docPath}`,
           showLastUpdateAuthor: true,
           showLastUpdateTime: true,
         },
@@ -96,13 +96,13 @@ const config = {
     announcementBar: {
       id: 'alpha_status',
       content:
-        'Hearth v0.3.0 is alpha software. See the <a href="/ROADMAP">roadmap and current limitations</a>.',
-      backgroundColor: '#fff1e8',
-      textColor: '#71331b',
+        'Noctaya v0.3.0 is alpha software. See the <a href="/ROADMAP">roadmap and current limitations</a>.',
+      backgroundColor: '#fff0f7',
+      textColor: '#701a4b',
       isCloseable: true,
     },
     navbar: {
-      title: 'Hearth',
+      title: 'Noctaya',
       hideOnScroll: true,
       items: [
         {
@@ -132,12 +132,12 @@ const config = {
           position: 'right',
         },
         {
-          href: 'https://github.com/hearth-project/hearth/issues/new/choose',
+          href: 'https://github.com/noctaya/noctaya/issues/new/choose',
           label: 'Report issue',
           position: 'right',
         },
         {
-          href: 'https://github.com/hearth-project/hearth',
+          href: 'https://github.com/noctaya/noctaya',
           label: 'GitHub',
           position: 'right',
         },
@@ -175,20 +175,20 @@ const config = {
           items: [
             {
               label: 'GitHub',
-              href: 'https://github.com/hearth-project/hearth',
+              href: 'https://github.com/noctaya/noctaya',
             },
             {
               label: 'Report an issue',
-              href: 'https://github.com/hearth-project/hearth/issues/new/choose',
+              href: 'https://github.com/noctaya/noctaya/issues/new/choose',
             },
             {
               label: 'Discussions',
-              href: 'https://github.com/hearth-project/hearth/discussions',
+              href: 'https://github.com/noctaya/noctaya/discussions',
             },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Hearth contributors. Apache-2.0 licensed.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Noctaya contributors. Apache-2.0 licensed.`,
     },
     prism: {
       theme: prismThemes.github,

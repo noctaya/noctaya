@@ -1,7 +1,7 @@
 image:
-  registry: ghcr.io/hearth-project
-  operator: hearth
-  gateway: hearth-gateway
+  registry: ghcr.io/noctaya
+  operator: noctaya
+  gateway: noctaya-gateway
   tag: ""
   pullPolicy: IfNotPresent
 

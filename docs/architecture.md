@@ -1,24 +1,24 @@
 # Architecture
 
-Hearth is a minimal, composable LLM serving control plane for private Kubernetes clusters. A single
+Noctaya is a minimal, composable LLM serving control plane for private Kubernetes clusters. A single
 `LLMService` manifest produces a declarative, queue-driven, **scale-to-zero** model server across
 NVIDIA, Ascend, and other accelerators.
 
-## Boundary (what Hearth is, and isn't)
+## Boundary (what Noctaya is, and isn't)
 
-Hearth owns the **Kubernetes orchestration / lifecycle layer**: rendering workloads, model loading,
+Noctaya owns the **Kubernetes orchestration / lifecycle layer**: rendering workloads, model loading,
 health, scheduling adaptation, scale-to-zero, and stable metrics surfaces. It deliberately does
 **not** re-implement the inference engine (that's **vLLM** + vendor plugins) or write chip kernels /
 device plugins / schedulers (that's the vendors, **HAMi**, **Volcano**). Fleet routing,
 prefill/decode disaggregation,
-and datacenter scale-out belong to **Kthena**, **AIBrix**, and **KServe**/**llm-d**; Hearth composes
+and datacenter scale-out belong to **Kthena**, **AIBrix**, and **KServe**/**llm-d**; Noctaya composes
 with them as the lightweight, scale-to-zero end of that axis (see
-["Hearth and Kthena"](https://hearth-project.dev/#hearth-and-kthena)). A new accelerator is a thin
+["Noctaya and Kthena"](https://noctaya.io/#noctaya-and-kthena)). A new accelerator is a thin
 adapter, not a rewrite.
 
 ## CRDs
 
-API group `serving.hearth.dev/v1alpha1`.
+API group `serving.noctaya.io/v1alpha1`.
 
 - **`LLMService`** (namespaced, user-facing) — *what* to serve and *how* to scale: the model source,
   a runtime selection (pin a backend or auto-pick by vendor), abstract resources, scaling intent
@@ -50,7 +50,7 @@ creates a cluster-internal scaler Service for the gateway's gRPC port.
 
 ```mermaid
 flowchart TD
-  llm["LLMService<br/>(+ InferenceRuntime)"] --> op["Hearth operator"]
+  llm["LLMService<br/>(+ InferenceRuntime)"] --> op["Noctaya operator"]
   op --> dep["vLLM Deployment<br/>(replicas owned by KEDA)"]
   op --> bsvc["Backend Service"]
   op --> gwd["Gateway Deployment + Service"]
@@ -65,7 +65,7 @@ flowchart TD
 flowchart LR
   client(["Inference client"])
   subgraph dp["Data plane"]
-    gw["Hearth Gateway<br/>buffer · backpressure<br/>keepalive · drain"]
+    gw["Noctaya Gateway<br/>buffer · backpressure<br/>keepalive · drain"]
   end
   subgraph wl["Workload"]
     svc["Backend Service"]
@@ -79,7 +79,7 @@ flowchart LR
   client -->|"OpenAI API"| gw
   gw -->|"forward when Ready"| svc --> pods
   pods -.->|"load weights"| cache
-  keda -->|"poll /hearth/queue (default)<br/>or StreamIsActive + GetMetrics"| gw
+  keda -->|"poll /noctaya/queue (default)<br/>or StreamIsActive + GetMetrics"| gw
   keda --> so
   so -->|"scale 0..N"| pods
 
@@ -95,7 +95,7 @@ flowchart LR
 2. **Cold request** — the gateway admits the request (bounded queue → `429` if full), raises its
    `pending` count, and holds the connection. In `keepalive` mode it streams SSE heartbeats so the
    client/ingress don't time out; in `reject` mode it returns `503 + Retry-After` and the client retries.
-3. **Activation** — in the default `metrics-api` mode, KEDA polls `/hearth/queue`. In opt-in
+3. **Activation** — in the default `metrics-api` mode, KEDA polls `/noctaya/queue`. In opt-in
    `external-push` mode, the co-located ExternalScaler sends an active event immediately and KEDA
    continues to call `GetMetrics` for the queue value. Either path drives the Deployment **0 → 1**.
    The pod loads weights from cache and becomes **Ready** only after the model is loaded.
@@ -110,14 +110,14 @@ flowchart LR
 `metrics-api` remains the compatibility default. Set the operator's
 `--scaler-mode=external-push` flag, or Helm value `gateway.scalerMode=external-push`, to remove the
 poll interval from cold activation. External-push requires exactly one gateway replica: a KEDA
-stream connects to one Pod and Hearth does not yet aggregate demand across gateway replicas. The
+stream connects to one Pod and Noctaya does not yet aggregate demand across gateway replicas. The
 operator refuses that mode when `gateway.replicas` is not `1`.
 
 Cold admission starts an activation lease that is independent of the client connection. The lease
 keeps demand active until the backend becomes ready (plus a short retry grace) or
 `activationTimeout` expires. This lets `reject` mode return `503 + Retry-After` without losing the
 activation signal. Every new gRPC stream receives the current state immediately, including when
-KEDA reconnects the stream. `/hearth/queue` remains available for observability and rollback.
+KEDA reconnects the stream. `/noctaya/queue` remains available for observability and rollback.
 
 The scaler Service is ClusterIP-only and uses plaintext gRPC on port `9090`; it is not exposed by
 the public gateway Service. Restrict access with cluster NetworkPolicy where tenant isolation is
@@ -126,15 +126,15 @@ required.
 ## Observability
 
 vLLM and the gateway expose `/metrics` through Services with a stable `http` port and
-`serving.hearth.dev/llmservice` discovery label. Hearth does not install or manage
+`serving.noctaya.io/llmservice` discovery label. Noctaya does not install or manage
 `kube-prometheus-stack` or other monitoring resources. The independent
-[`examples/observability`](https://github.com/hearth-project/hearth/tree/main/examples/observability)
+[`examples/observability`](https://github.com/noctaya/noctaya/tree/main/examples/observability)
 package provides an opt-in `ServiceMonitor` and Grafana dashboard.
 
 ## Caching
 
 Cold-start cost is dominated by fetching + loading weights, so caching is what makes scale-to-zero
-usable. Hearth supports `HostPath` and `NodeLocalPVC` (with a pinnable `storageClassName`), plus a
+usable. Noctaya supports `HostPath` and `NodeLocalPVC` (with a pinnable `storageClassName`), plus a
 prewarm Job for Hugging Face or ModelScope weights. A `pvc://` source mounts pre-staged weights
 read-only and skips prewarming. Node-local caches are per-node today;
 `SharedPVC` (RWX) for multi-node is on the roadmap.

@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,9 +19,9 @@ limitations under the License.
 package registry
 
 import (
-	"github.com/hearth-project/hearth/internal/backend"
-	"github.com/hearth-project/hearth/internal/backend/ascend"
-	"github.com/hearth-project/hearth/internal/backend/nvidia"
+	"github.com/noctaya/noctaya/internal/backend"
+	"github.com/noctaya/noctaya/internal/backend/ascend"
+	"github.com/noctaya/noctaya/internal/backend/nvidia"
 )
 
 // New returns the registry of built-in Kubernetes adapters.

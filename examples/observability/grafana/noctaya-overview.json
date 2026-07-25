@@ -9,11 +9,11 @@
       "pluginName": "Prometheus"
     }
   ],
-  "title": "Hearth — LLM Serving Overview",
-  "uid": "hearth-overview",
+  "title": "Noctaya — LLM Serving Overview",
+  "uid": "noctaya-overview",
   "schemaVersion": 39,
   "editable": true,
-  "tags": ["hearth", "llm", "vllm"],
+  "tags": ["noctaya", "llm", "vllm"],
   "time": { "from": "now-1h", "to": "now" },
   "templating": {
     "list": [
@@ -33,7 +33,7 @@
       "datasource": "${datasource}",
       "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
       "targets": [
-        { "expr": "sum(hearth_gateway_pending)", "legendFormat": "pending" }
+        { "expr": "sum(noctaya_gateway_pending)", "legendFormat": "pending" }
       ]
     },
     {
@@ -43,7 +43,7 @@
       "datasource": "${datasource}",
       "gridPos": { "h": 6, "w": 9, "x": 6, "y": 0 },
       "targets": [
-        { "expr": "sum(rate(hearth_gateway_requests_total[5m])) by (code)", "legendFormat": "{{code}}" }
+        { "expr": "sum(rate(noctaya_gateway_requests_total[5m])) by (code)", "legendFormat": "{{code}}" }
       ]
     },
     {
@@ -53,7 +53,7 @@
       "datasource": "${datasource}",
       "gridPos": { "h": 6, "w": 9, "x": 15, "y": 0 },
       "targets": [
-        { "expr": "sum(rate(hearth_gateway_rejections_total[5m])) by (reason)", "legendFormat": "{{reason}}" }
+        { "expr": "sum(rate(noctaya_gateway_rejections_total[5m])) by (reason)", "legendFormat": "{{reason}}" }
       ]
     },
     {
@@ -63,7 +63,7 @@
       "datasource": "${datasource}",
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 6 },
       "targets": [
-        { "expr": "histogram_quantile(0.95, sum(rate(hearth_gateway_activation_wait_seconds_bucket[5m])) by (le))", "legendFormat": "p95" }
+        { "expr": "histogram_quantile(0.95, sum(rate(noctaya_gateway_activation_wait_seconds_bucket[5m])) by (le))", "legendFormat": "p95" }
       ]
     },
     {

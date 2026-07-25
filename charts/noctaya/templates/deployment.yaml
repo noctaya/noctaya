@@ -8,31 +8,31 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "hearth.fullname" . }}-controller-manager
+  name: {{ include "noctaya.fullname" . }}-controller-manager
   namespace: {{ .Release.Namespace }}
-  labels: {{- include "hearth.labels" . | nindent 4 }}
+  labels: {{- include "noctaya.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.operator.replicas }}
   selector:
-    matchLabels: {{- include "hearth.selectorLabels" . | nindent 6 }}
+    matchLabels: {{- include "noctaya.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      labels: {{- include "hearth.selectorLabels" . | nindent 8 }}
+      labels: {{- include "noctaya.selectorLabels" . | nindent 8 }}
     spec:
-      serviceAccountName: {{ include "hearth.serviceAccountName" . }}
+      serviceAccountName: {{ include "noctaya.serviceAccountName" . }}
       securityContext:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
       containers:
         - name: manager
-          image: {{ include "hearth.operatorImage" . }}
+          image: {{ include "noctaya.operatorImage" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
             - --leader-elect={{ .Values.operator.leaderElect }}
             - --health-probe-bind-address=:8081
             - --metrics-bind-address=0
-            - --gateway-image={{ include "hearth.gatewayImage" . }}
+            - --gateway-image={{ include "noctaya.gatewayImage" . }}
             - --gateway-replicas={{ .Values.gateway.replicas }}
             - --scaler-mode={{ $scalerMode }}
           livenessProbe:

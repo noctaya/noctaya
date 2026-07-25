@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package v1alpha1 contains API Schema definitions for the serving v1alpha1 API group.
 // +kubebuilder:object:generate=true
-// +groupName=serving.hearth.dev
+// +groupName=serving.noctaya.io
 package v1alpha1
 
 import (
@@ -28,7 +28,7 @@ import (
 var (
 	// SchemeGroupVersion is group version used to register these objects.
 	// This name is used by applyconfiguration generators (e.g. controller-gen).
-	SchemeGroupVersion = schema.GroupVersion{Group: "serving.hearth.dev", Version: "v1alpha1"}
+	SchemeGroupVersion = schema.GroupVersion{Group: "serving.noctaya.io", Version: "v1alpha1"}
 
 	// GroupVersion is an alias for SchemeGroupVersion, for backward compatibility.
 	GroupVersion = SchemeGroupVersion

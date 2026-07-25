@@ -4,18 +4,18 @@
 
 | Profile | Validation level | Status |
 |---|---|---|
-| NVIDIA A10 | Scale-to-zero and coexistence verified | Hearth v0.3.0-rc.1 passed `0 -> 1 -> 2 -> 0` on two physical 24 GB GPUs on 2026-07-19. |
+| NVIDIA A10 | Scale-to-zero and coexistence verified | Noctaya v0.3.0-rc.1 passed `0 -> 1 -> 2 -> 0` on two physical 24 GB GPUs on 2026-07-19. |
 
 The current result covers the operator, gateway, NVIDIA device plugin, KEDA external-push scaler,
 Volcano scheduling, model cache, vLLM, and concurrent operation with a Kthena-managed hot model.
-Hearth recovered automatically after a real host reboot. A separate Kthena recovery qualification
-is recorded below and does not change the Hearth result. The run follows the official
+Noctaya recovered automatically after a real host reboot. A separate Kthena recovery qualification
+is recorded below and does not change the Noctaya result. The run follows the official
 [NVIDIA Container Toolkit installation guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html),
 [K3s NVIDIA runtime guidance](https://docs.k3s.io/advanced#nvidia-container-runtime-support),
 [NVIDIA device-plugin documentation](https://github.com/NVIDIA/k8s-device-plugin), and
 [vLLM OpenAI-compatible server documentation](https://docs.vllm.ai/en/latest/serving/online_serving/openai_compatible_server/).
 
-The hardware-neutral [Hearth and Kthena demo](../demo.md) shows the core lifecycle
+The hardware-neutral [Noctaya and Kthena walkthrough](../demo.md) shows the core lifecycle
 with real `kubectl` and `curl` commands.
 
 ## Validation baseline
@@ -30,7 +30,7 @@ with real `kubectl` and `curl` commands.
 | Context limit | Explicit `--max-model-len=4096` |
 | GPU memory target | `--gpu-memory-utilization=0.9` |
 | Autoscaling | KEDA `2.20.1`, external-push mode |
-| Scheduling | Volcano `1.15.0`, with separate queues for Hearth and Kthena |
+| Scheduling | Volcano `1.15.0`, with separate queues for Noctaya and Kthena |
 | Replica limit | `scaling.max: 1` normally; temporarily raised to `2` for the two-GPU test |
 | Drain timeout | `120s` |
 | Cache | 30 GiB `NodeLocalPVC` with prewarming |
@@ -46,12 +46,12 @@ with real `kubectl` and `curl` commands.
 | Helm / KEDA | Helm `4.2.3`; KEDA `2.20.1` |
 | Volcano / Kthena | Volcano `1.15.0`; Kthena `1.0.0` |
 | NVIDIA integration | Container Toolkit `1.19.1`; device plugin `0.19.3`; whole-GPU mode |
-| vLLM image | `registry-huabei2.crs-internal.ctyun.cn/hearth-dev/vllm-openai:v0.25.1`; immutable digest was not retained |
-| Hearth images | `registry-huabei2.crs-internal.ctyun.cn/hearth-dev/hearth:0.3.0-rc.1` and `hearth-gateway:0.3.0-rc.1`; immutable digests were not retained |
+| vLLM image | Private-registry mirror of `vllm/vllm-openai:v0.25.1`; immutable digest was not retained |
+| Noctaya images | Locally published operator and gateway builds from `v0.3.0-rc.1`; immutable digests were not retained |
 | Model / cache | `Qwen/Qwen2.5-7B-Instruct`; 30 GiB NodeLocalPVC on a dedicated 120 GB ext4 data disk |
 
 The checked-in profile deliberately remains scheduler-neutral and uses the public vLLM image. The
-integration run used internal image mirrors, selected Volcano with a `hearth-longtail` queue, set a
+integration run used internal image mirrors, selected Volcano with a `noctaya-longtail` queue, set a
 queue target of one for deterministic scale-out, and temporarily raised `spec.scaling.max` to `2`.
 The model, positional vLLM argument, accelerator request, resources, probes, lifecycle, cache, and
 metrics matched the checked-in profile. Volcano is not baked into the base profile because it is an
@@ -68,7 +68,7 @@ Observed functional results:
   completed with real model output and HTTP 200 in `91.876s`.
 - Six pending requests drove `1 -> 2`; Volcano scheduled two Ready Pods on distinct physical GPU
   UUIDs. Direct inference through both Pods returned HTTP 200, followed by observed `2 -> 1 -> 0`.
-- Kthena served a hot model while Hearth used the other GPU. Both generated 512 tokens concurrently
+- Kthena served a hot model while Noctaya used the other GPU. Both generated 512 tokens concurrently
   in about `16.6s`; both requests returned HTTP 200 and both GPUs reached 100% sampled utilization.
 - A 105-client cold burst produced exactly 100 admitted HTTP 200 heartbeat streams and five HTTP
   429 responses. Gateway counters matched the observed results.
@@ -77,10 +77,10 @@ Observed functional results:
 - A streaming request completed with HTTP 200 and `[DONE]` after its exact backend Pod was deleted;
   the configured pre-stop drain protected the in-flight stream.
 - vLLM exposed `vllm:kv_cache_usage_perc`, queue, running-request, and time-to-first-token metrics.
-- Same-values Helm upgrade and replacement of the Hearth controller, gateway, KEDA operator,
+- Same-values Helm upgrade and replacement of the Noctaya controller, gateway, KEDA operator,
   Volcano scheduler, Kthena controller, and NVIDIA device plugin all converged with new Pod UIDs.
 - After a real host reboot, the data disk remounted, the cache fingerprint was unchanged, GPU
-  capacity returned to two, and Hearth recovered automatically in `ScaledToZero` with its gateway
+  capacity returned to two, and Noctaya recovered automatically in `ScaledToZero` with its gateway
   Ready.
 - A fractional accelerator request was rejected at render time with an explicit unsupported error
   and created no owned workload, which is the expected boundary for this whole-GPU profile.
@@ -93,7 +93,7 @@ recreate that terminal Pod during an observation period longer than two minutes,
 `ServingGroupRecreate` recovery policy. Deleting the failed Pod manually caused immediate
 recreation with a new UID, and the route then returned HTTP 200.
 
-Hearth recovered without manual intervention. Treat this as a Kthena/device-plugin startup-order
+Noctaya recovered without manual intervention. Treat this as a Kthena/device-plugin startup-order
 recovery gap and test it independently before relying on the combined stack for unattended reboot
 recovery.
 
@@ -189,8 +189,8 @@ Keep container images and model PVCs off a small system disk. For K3s, configure
 `/etc/rancher/k3s/config.yaml` after mounting the data disk persistently:
 
 ```yaml
-data-dir: /var/lib/hearth-data/k3s
-default-local-storage-path: /var/lib/hearth-data/local-path
+data-dir: /var/lib/noctaya-data/k3s
+default-local-storage-path: /var/lib/noctaya-data/local-path
 ```
 
 Restart K3s and prove the placement with a disposable PVC. Do not rely only on the live local-path
@@ -198,15 +198,15 @@ ConfigMap because K3s regenerates packaged manifests.
 
 ## 5. Deploy the A10 profile
 
-Install Hearth and KEDA first. For the default Kubernetes scheduler, apply the independent profile
+Install Noctaya and KEDA first. For the default Kubernetes scheduler, apply the independent profile
 to a dedicated namespace:
 
 ```bash
-kubectl create namespace hearth-a10-validation
-kubectl apply -k examples/nvidia/a10 -n hearth-a10-validation
+kubectl create namespace noctaya-a10-validation
+kubectl apply -k examples/nvidia/a10 -n noctaya-a10-validation
 kubectl get inferenceruntime vllm-nvidia-a10
 kubectl get llmservice,pvc,job,deploy,pod,scaledobject \
-  -n hearth-a10-validation -w
+  -n noctaya-a10-validation -w
 ```
 
 The base profile deliberately does not require Volcano. To repeat the optional Volcano path,
@@ -217,7 +217,7 @@ the scheduler only when it is first created:
 apiVersion: scheduling.volcano.sh/v1beta1
 kind: Queue
 metadata:
-  name: hearth-longtail
+  name: noctaya-longtail
 spec:
   parent: root
   weight: 1
@@ -225,24 +225,24 @@ spec:
 ```
 
 ```bash
-kubectl create namespace hearth-a10-validation
+kubectl create namespace noctaya-a10-validation
 kubectl apply -f queue.yaml
 kubectl apply -f \
   examples/nvidia/a10/serving_v1alpha1_inferenceruntime.yaml
 kubectl patch inferenceruntime vllm-nvidia-a10 --type merge \
-  -p '{"spec":{"accelerator":{"scheduler":{"name":"volcano","queue":"hearth-longtail"}}}}'
-kubectl apply -n hearth-a10-validation -f \
+  -p '{"spec":{"accelerator":{"scheduler":{"name":"volcano","queue":"noctaya-longtail"}}}}'
+kubectl apply -n noctaya-a10-validation -f \
   examples/nvidia/a10/serving_v1alpha1_llmservice.yaml
 ```
 
 This is an alternative to `kubectl apply -k examples/nvidia/a10`, not a second step after it.
 Kthena workloads and queues are installed and managed independently; see the
-[operational demo](../demo.md) for the coexistence boundary.
+[operational walkthrough](../demo.md) for the coexistence boundary.
 
 On a lab with two otherwise-idle A10 GPUs, raise the maximum only for the scale-out test:
 
 ```bash
-kubectl patch llmservice qwen2-5-7b-a10 -n hearth-a10-validation \
+kubectl patch llmservice qwen2-5-7b-a10 -n noctaya-a10-validation \
   --type merge -p '{"spec":{"scaling":{"max":2}}}'
 ```
 
@@ -250,8 +250,8 @@ Wait for prewarming to complete and the backend to settle at zero. Confirm that 
 request a GPU and the backend template requests one:
 
 ```bash
-kubectl get job qwen2-5-7b-a10-prewarm -n hearth-a10-validation
-kubectl get deployment qwen2-5-7b-a10 -n hearth-a10-validation -o yaml
+kubectl get job qwen2-5-7b-a10-prewarm -n noctaya-a10-validation
+kubectl get deployment qwen2-5-7b-a10 -n noctaya-a10-validation -o yaml
 ```
 
 ## 6. Exercise inference and scale-to-zero
@@ -259,7 +259,7 @@ kubectl get deployment qwen2-5-7b-a10 -n hearth-a10-validation -o yaml
 Expose the stable gateway Service:
 
 ```bash
-kubectl port-forward -n hearth-a10-validation service/qwen2-5-7b-a10 8080:80
+kubectl port-forward -n noctaya-a10-validation service/qwen2-5-7b-a10 8080:80
 ```
 
 Send a streaming request while the backend is at zero:
@@ -267,7 +267,7 @@ Send a streaming request while the backend is at zero:
 ```bash
 curl -N http://127.0.0.1:8080/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -d '{"model":"qwen2-5-7b-a10","stream":true,"messages":[{"role":"user","content":"Reply with: Hearth A10 validation passed"}]}'
+  -d '{"model":"qwen2-5-7b-a10","stream":true,"messages":[{"role":"user","content":"Reply with: Noctaya A10 validation passed"}]}'
 ```
 
 Record gateway heartbeats, `0 -> 1`, load-gated readiness, HTTP 200, real model tokens, `[DONE]`,
@@ -277,7 +277,7 @@ and prove that two Ready Pods have different allocated GPU UUIDs before allowing
 Check the runtime metrics directly while a backend exists:
 
 ```bash
-kubectl port-forward -n hearth-a10-validation service/qwen2-5-7b-a10-backend 8000:8000
+kubectl port-forward -n noctaya-a10-validation service/qwen2-5-7b-a10-backend 8000:8000
 curl -fsS http://127.0.0.1:8000/metrics | \
   grep -E 'vllm:(kv_cache_usage_perc|num_requests_waiting|num_requests_running|time_to_first_token_seconds)'
 ```
@@ -288,7 +288,7 @@ For a complete validation, retain object UIDs and cache fingerprints before each
 
 - no-op profile reapply;
 - operator and gateway Pod replacement;
-- same-values Hearth Helm upgrade;
+- same-values Noctaya Helm upgrade;
 - KEDA and optional scheduler/controller replacement;
 - device-plugin Pod replacement and a fresh CUDA smoke Pod;
 - in-flight streaming completion during backend Pod deletion; and
@@ -296,7 +296,7 @@ For a complete validation, retain object UIDs and cache fingerprints before each
   inference.
 
 If another serving system shares the cluster, verify its route and recovery independently before
-and after disruptive tests. A successful Hearth recovery does not establish another controller's
+and after disruptive tests. A successful Noctaya recovery does not establish another controller's
 recovery behavior.
 
 Do not run destructive recovery tests on a shared or production cluster.
@@ -309,7 +309,7 @@ Check the exact product label, allocatable `nvidia.com/gpu`, taints, PVC binding
 workloads:
 
 ```bash
-kubectl describe pod -n hearth-a10-validation <backend-pod>
+kubectl describe pod -n noctaya-a10-validation <backend-pod>
 kubectl get nodes -L nvidia.com/gpu.product
 kubectl describe node <a10-node>
 nvidia-smi
@@ -324,13 +324,13 @@ inject a GPU.
 ### Backend never becomes Ready
 
 ```bash
-BACKEND_POD=$(kubectl get pod -n hearth-a10-validation \
-  -l serving.hearth.dev/llmservice=qwen2-5-7b-a10 \
+BACKEND_POD=$(kubectl get pod -n noctaya-a10-validation \
+  -l serving.noctaya.io/llmservice=qwen2-5-7b-a10 \
   --field-selector=status.phase=Running \
   -o jsonpath='{.items[0].metadata.name}')
-kubectl logs -n hearth-a10-validation "$BACKEND_POD"
-kubectl describe pod -n hearth-a10-validation \
-  -l serving.hearth.dev/llmservice=qwen2-5-7b-a10
+kubectl logs -n noctaya-a10-validation "$BACKEND_POD"
+kubectl describe pod -n noctaya-a10-validation \
+  -l serving.noctaya.io/llmservice=qwen2-5-7b-a10
 ```
 
 Check image/driver compatibility, rendered arguments, cache contents, GPU assignment, and startup
@@ -353,7 +353,7 @@ kubectl describe pod -n <kthena-workload-namespace> <serving-pod>
 ```
 
 In the recorded run, deleting the terminal serving Pod let Kthena recreate it after the device
-plugin recovered. This is a Kthena/device-plugin recovery workaround, not Hearth reconciliation.
+plugin recovered. This is a Kthena/device-plugin recovery workaround, not Noctaya reconciliation.
 
 ## Success criteria
 

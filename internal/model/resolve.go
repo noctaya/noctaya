@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,8 +25,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 
-	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
-	"github.com/hearth-project/hearth/internal/backend"
+	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
+	"github.com/noctaya/noctaya/internal/backend"
 )
 
 // Resolve maps a model source to the path and environment consumed by the runtime.

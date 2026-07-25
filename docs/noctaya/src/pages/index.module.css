@@ -1,7 +1,7 @@
 .homepage {
-  --home-ink: #14212b;
+  --home-ink: #1d142c;
   --home-muted: #5e6972;
-  --home-line: rgba(20, 33, 43, 0.12);
+  --home-line: rgba(29, 20, 44, 0.12);
   overflow: hidden;
 }
 
@@ -9,8 +9,8 @@
   position: relative;
   padding: 7.5rem 1.5rem 5.5rem;
   background:
-    radial-gradient(circle at 78% 26%, rgba(255, 111, 50, 0.15), transparent 30rem),
-    linear-gradient(180deg, #fffaf6 0%, #ffffff 80%);
+    radial-gradient(circle at 78% 26%, rgba(236, 72, 153, 0.15), transparent 30rem),
+    linear-gradient(180deg, #fff7fb 0%, #ffffff 80%);
 }
 
 .heroGlow {
@@ -19,11 +19,11 @@
   left: 54%;
   width: 32rem;
   height: 32rem;
-  border: 1px solid rgba(249, 115, 22, 0.12);
+  border: 1px solid rgba(236, 72, 153, 0.12);
   border-radius: 50%;
   box-shadow:
-    0 0 0 6rem rgba(249, 115, 22, 0.025),
-    0 0 0 12rem rgba(249, 115, 22, 0.018);
+    0 0 0 6rem rgba(236, 72, 153, 0.025),
+    0 0 0 12rem rgba(236, 72, 153, 0.018);
   pointer-events: none;
 }
 
@@ -44,7 +44,7 @@
 .eyebrow,
 .kicker {
   margin: 0 0 1.35rem;
-  color: #d9501e;
+  color: #be185d;
   font-size: 0.76rem;
   font-weight: 750;
   letter-spacing: 0.13em;
@@ -56,7 +56,7 @@
   gap: 0.65rem;
   align-items: center;
   padding: 0.45rem 0.7rem;
-  border: 1px solid rgba(217, 80, 30, 0.18);
+  border: 1px solid rgba(190, 24, 93, 0.18);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.72);
 }
@@ -65,8 +65,8 @@
   width: 0.45rem;
   height: 0.45rem;
   border-radius: 50%;
-  background: #f97316;
-  box-shadow: 0 0 0 0.3rem rgba(249, 115, 22, 0.13);
+  background: #ec4899;
+  box-shadow: 0 0 0 0.3rem rgba(236, 72, 153, 0.13);
 }
 
 .heroCopy h1 {
@@ -81,7 +81,7 @@
 
 .heroCopy h1 span {
   display: block;
-  color: #ee5a24;
+  color: #c0266d;
 }
 
 .heroLead {
@@ -117,8 +117,8 @@
 .primaryAction {
   gap: 0.65rem;
   color: #fff !important;
-  background: #e95824;
-  box-shadow: 0 0.7rem 1.5rem rgba(201, 70, 23, 0.18);
+  background: #c0266d;
+  box-shadow: 0 0.7rem 1.5rem rgba(190, 24, 93, 0.18);
 }
 
 .primaryAction svg,
@@ -139,11 +139,11 @@
 }
 
 .primaryAction:hover {
-  box-shadow: 0 0.9rem 1.8rem rgba(201, 70, 23, 0.25);
+  box-shadow: 0 0.9rem 1.8rem rgba(190, 24, 93, 0.25);
 }
 
 .secondaryAction:hover {
-  border-color: rgba(217, 80, 30, 0.4);
+  border-color: rgba(190, 24, 93, 0.4);
 }
 
 .heroProof {
@@ -165,7 +165,7 @@
 .heroProof svg {
   width: 0.95rem;
   height: 0.95rem;
-  color: #e95824;
+  color: #c0266d;
 }
 
 .terminalWrap {
@@ -176,7 +176,7 @@
   position: absolute;
   inset: 8% -7% -8% 12%;
   border-radius: 2.2rem;
-  background: linear-gradient(145deg, rgba(255, 153, 102, 0.3), rgba(255, 216, 189, 0.08));
+  background: linear-gradient(145deg, rgba(244, 114, 182, 0.3), rgba(252, 231, 243, 0.08));
   content: '';
   filter: blur(1px);
   transform: rotate(3deg);
@@ -188,8 +188,8 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 1rem;
   color: #d9e4e6;
-  background: #101b21;
-  box-shadow: 0 2.5rem 5rem rgba(20, 33, 43, 0.23);
+  background: #100c1c;
+  box-shadow: 0 2.5rem 5rem rgba(29, 20, 44, 0.23);
   font-family: var(--ifm-font-family-monospace);
 }
 
@@ -220,16 +220,16 @@
 }
 
 .windowDots i:nth-child(3) {
-  background: #54c785;
+  background: #a3e635;
 }
 
 .liveBadge {
   justify-self: end;
   padding: 0.2rem 0.45rem;
-  border: 1px solid rgba(69, 203, 132, 0.24);
+  border: 1px solid rgba(163, 230, 53, 0.24);
   border-radius: 999px;
-  color: #75dda5;
-  background: rgba(69, 203, 132, 0.08);
+  color: #bef264;
+  background: rgba(163, 230, 53, 0.08);
   text-transform: uppercase;
 }
 
@@ -244,7 +244,7 @@
 
 .prompt {
   margin-right: 0.55rem;
-  color: #ff8354;
+  color: #f472b6;
 }
 
 .tableHead,
@@ -268,7 +268,7 @@
 }
 
 .zero {
-  color: #f7ad77;
+  color: #f9a8d4;
 }
 
 .eventLine {
@@ -297,31 +297,31 @@
   width: 2rem;
   height: 2rem;
   place-items: center;
-  border: 1px solid #45575e;
+  border: 1px solid #5d4a69;
   border-radius: 50%;
   color: #93a5aa;
-  background: #16242a;
+  background: #19122b;
   font-size: 0.72rem;
 }
 
 .scaleNodeActive {
-  border-color: #e96a37;
+  border-color: #db2777;
   color: #fff;
-  background: #d95726;
-  box-shadow: 0 0 0 0.35rem rgba(233, 106, 55, 0.12);
+  background: #be185d;
+  box-shadow: 0 0 0 0.35rem rgba(219, 39, 119, 0.12);
 }
 
 .scaleLine {
   height: 1px;
   overflow: hidden;
-  background: #34464d;
+  background: #463653;
 }
 
 .scaleLine span {
   display: block;
   width: 40%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, #fa8252, transparent);
+  background: linear-gradient(90deg, transparent, #f472b6, transparent);
   animation: flow 2.2s linear infinite;
 }
 
@@ -341,7 +341,7 @@
 }
 
 .eventLog time {
-  color: #526970;
+  color: #6f5b79;
 }
 
 .readyDot {
@@ -350,8 +350,8 @@
   height: 0.42rem;
   margin-right: 0.45rem;
   border-radius: 50%;
-  background: #54c785;
-  box-shadow: 0 0 0 0.25rem rgba(84, 199, 133, 0.1);
+  background: #a3e635;
+  box-shadow: 0 0 0 0.25rem rgba(163, 230, 53, 0.1);
 }
 
 .terminalCaption {
@@ -359,14 +359,14 @@
   display: flex;
   justify-content: space-between;
   margin: 1rem 0.4rem 0;
-  color: #7c675e;
+  color: #77647c;
   font-size: 0.73rem;
   font-weight: 650;
 }
 
 .validationBand {
-  border-top: 1px solid #eee7e1;
-  border-bottom: 1px solid #eee7e1;
+  border-top: 1px solid #f1e8f4;
+  border-bottom: 1px solid #f1e8f4;
   background: #fff;
 }
 
@@ -392,7 +392,7 @@
   flex-wrap: wrap;
   gap: 0.75rem 2rem;
   justify-content: space-between;
-  color: #394751;
+  color: #51405e;
   font-size: 0.76rem;
   font-weight: 700;
 }
@@ -462,7 +462,7 @@
 }
 
 .cardNumber {
-  color: #e96836;
+  color: #d63384;
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.72rem;
 }
@@ -484,8 +484,8 @@
 .architectureSection {
   color: #e8edef;
   background:
-    radial-gradient(circle at 80% 50%, rgba(238, 90, 36, 0.14), transparent 24rem),
-    #111d23;
+    radial-gradient(circle at 80% 50%, rgba(192, 38, 109, 0.14), transparent 24rem),
+    #120e20;
 }
 
 .architectureGrid {
@@ -520,7 +520,7 @@
 }
 
 .boundaryList strong {
-  color: #f28a60;
+  color: #ef7fb5;
 }
 
 .boundaryList span {
@@ -531,7 +531,7 @@
   display: inline-flex;
   gap: 0.5rem;
   align-items: center;
-  color: #f27a49 !important;
+  color: #e85ca3 !important;
   font-size: 0.86rem;
   font-weight: 750;
   text-decoration: none !important;
@@ -575,7 +575,7 @@
 
 .flowConnector i {
   width: 1px;
-  background: linear-gradient(#56666c, #ea6a38);
+  background: linear-gradient(#56666c, #db2777);
 }
 
 .flowCore {
@@ -584,9 +584,9 @@
   align-items: center;
   margin: 0 auto;
   padding: 0.9rem 1.2rem;
-  border: 1px solid rgba(238, 90, 36, 0.5);
+  border: 1px solid rgba(192, 38, 109, 0.5);
   border-radius: 0.75rem;
-  background: rgba(238, 90, 36, 0.1);
+  background: rgba(192, 38, 109, 0.1);
 }
 
 .flowCore div {
@@ -599,7 +599,7 @@
 }
 
 .flowCore span {
-  color: #d2957d;
+  color: #d28aaa;
   font-size: 0.66rem;
 }
 
@@ -614,7 +614,7 @@
 }
 
 .kthenaSection {
-  background: #f8f4f0;
+  background: #faf7fc;
 }
 
 .policyHeader {
@@ -637,7 +637,7 @@
 }
 
 .policyTag {
-  color: #9a6e5a;
+  color: #8a5a78;
   font-size: 0.66rem;
   font-weight: 750;
   letter-spacing: 0.1em;
@@ -660,7 +660,7 @@
 
 .policyPlus {
   align-self: center;
-  color: #c9b6ad;
+  color: #c8b8cf;
   font-size: 1.7rem;
 }
 
@@ -679,12 +679,12 @@
 .coldLine i {
   width: 100%;
   height: 2px;
-  background: #52b984;
-  box-shadow: 0 0 0.7rem rgba(82, 185, 132, 0.3);
+  background: #84cc16;
+  box-shadow: 0 0 0.7rem rgba(132, 204, 22, 0.3);
 }
 
 .coldLine i {
-  background: repeating-linear-gradient(90deg, #ee7543 0 1rem, transparent 1rem 1.5rem);
+  background: repeating-linear-gradient(90deg, #e04f97 0 1rem, transparent 1rem 1.5rem);
   box-shadow: none;
 }
 
@@ -711,8 +711,8 @@
   padding: 3.5rem;
   border-radius: 1.25rem;
   background:
-    radial-gradient(circle at 90% 0%, rgba(255, 167, 112, 0.28), transparent 22rem),
-    #fff3ea;
+    radial-gradient(circle at 90% 0%, rgba(249, 168, 212, 0.28), transparent 22rem),
+    #fff0f7;
 }
 
 .ctaCard > div:first-child {
@@ -870,8 +870,8 @@
 
 [data-theme='dark'] .hero {
   background:
-    radial-gradient(circle at 78% 26%, rgba(238, 90, 36, 0.13), transparent 30rem),
-    linear-gradient(180deg, #101b21 0%, #132128 100%);
+    radial-gradient(circle at 78% 26%, rgba(192, 38, 109, 0.13), transparent 30rem),
+    linear-gradient(180deg, #100c1c 0%, #171126 100%);
 }
 
 [data-theme='dark'] .eyebrow,
@@ -889,7 +889,7 @@
 [data-theme='dark'] .capabilitySection,
 [data-theme='dark'] .ctaSection {
   border-color: rgba(255, 255, 255, 0.08);
-  background: #132128;
+  background: #171126;
 }
 
 [data-theme='dark'] .bandItems {
@@ -897,7 +897,7 @@
 }
 
 [data-theme='dark'] .kthenaSection {
-  background: #101b21;
+  background: #100c1c;
 }
 
 [data-theme='dark'] .policyGrid article {
@@ -906,6 +906,6 @@
 
 [data-theme='dark'] .ctaCard {
   background:
-    radial-gradient(circle at 90% 0%, rgba(238, 90, 36, 0.2), transparent 22rem),
-    #18282f;
+    radial-gradient(circle at 90% 0%, rgba(192, 38, 109, 0.2), transparent 22rem),
+    #211730;
 }

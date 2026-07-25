@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,9 +25,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
-	"github.com/hearth-project/hearth/internal/backend"
-	"github.com/hearth-project/hearth/internal/backend/nvidia"
+	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
+	"github.com/noctaya/noctaya/internal/backend"
+	"github.com/noctaya/noctaya/internal/backend/nvidia"
 )
 
 func sampleRuntime() *servingv1alpha1.InferenceRuntime {
@@ -116,8 +116,8 @@ func TestBuildDeploymentAssembles(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 
 	g.Expect(dep.Spec.Replicas).To(BeNil())
-	g.Expect(dep.Spec.Selector.MatchLabels).To(HaveKeyWithValue("serving.hearth.dev/llmservice", "qwen3-8b"))
-	g.Expect(dep.Spec.Template.Labels).To(HaveKeyWithValue("serving.hearth.dev/runtime", "vllm-nvidia"))
+	g.Expect(dep.Spec.Selector.MatchLabels).To(HaveKeyWithValue("serving.noctaya.io/llmservice", "qwen3-8b"))
+	g.Expect(dep.Spec.Template.Labels).To(HaveKeyWithValue("serving.noctaya.io/runtime", "vllm-nvidia"))
 
 	c := dep.Spec.Template.Spec.Containers[0]
 	g.Expect(c.Resources.Limits).To(HaveKey(corev1.ResourceName("nvidia.com/gpu")))

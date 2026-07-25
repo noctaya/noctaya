@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	externalscaler "github.com/hearth-project/hearth/internal/gateway/externalscaler"
+	externalscaler "github.com/noctaya/noctaya/internal/gateway/externalscaler"
 )
 
 const scalerMetricName = "pending"

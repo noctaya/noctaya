@@ -37,8 +37,8 @@ jobs:
             exit 1
           fi
 
-          CHART_VERSION="$(awk '$1 == "version:" {gsub(/"/, "", $2); print $2}' charts/hearth/Chart.yaml)"
-          APP_VERSION="$(awk '$1 == "appVersion:" {gsub(/"/, "", $2); print $2}' charts/hearth/Chart.yaml)"
+          CHART_VERSION="$(awk '$1 == "version:" {gsub(/"/, "", $2); print $2}' charts/noctaya/Chart.yaml)"
+          APP_VERSION="$(awk '$1 == "appVersion:" {gsub(/"/, "", $2); print $2}' charts/noctaya/Chart.yaml)"
           if [[ "${CHART_VERSION}" != "${VERSION}" || "${APP_VERSION}" != "${VERSION}" ]]; then
             echo "Tag ${VERSION}, chart ${CHART_VERSION}, and app ${APP_VERSION} must match" >&2
             exit 1
@@ -46,8 +46,8 @@ jobs:
 
           grep -Fq "## [${VERSION}]" CHANGELOG.md
           git merge-base --is-ancestor "${GITHUB_SHA}" "origin/main"
-          helm lint charts/hearth
-          helm template hearth charts/hearth --namespace hearth-system >/dev/null
+          helm lint charts/noctaya
+          helm template noctaya charts/noctaya --namespace noctaya-system >/dev/null
 
   images:
     name: Publish container images
@@ -79,15 +79,15 @@ jobs:
           {
             echo "version=${VERSION}"
             echo "operator_tags<<EOF"
-            echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/hearth:${VERSION}"
+            echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/noctaya:${VERSION}"
             if [[ "${VERSION}" != *-* ]]; then
-              echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/hearth:latest"
+              echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/noctaya:latest"
             fi
             echo "EOF"
             echo "gateway_tags<<EOF"
-            echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/hearth-gateway:${VERSION}"
+            echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/noctaya-gateway:${VERSION}"
             if [[ "${VERSION}" != *-* ]]; then
-              echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/hearth-gateway:latest"
+              echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/noctaya-gateway:latest"
             fi
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
@@ -101,8 +101,8 @@ jobs:
           push: true
           build-args: VERSION=${{ steps.v.outputs.version }}
           tags: ${{ steps.v.outputs.operator_tags }}
-          cache-from: type=gha,scope=hearth-operator
-          cache-to: type=gha,mode=max,scope=hearth-operator
+          cache-from: type=gha,scope=noctaya-operator
+          cache-to: type=gha,mode=max,scope=noctaya-operator
           provenance: mode=max
           sbom: true
 
@@ -115,8 +115,8 @@ jobs:
           push: true
           build-args: VERSION=${{ steps.v.outputs.version }}
           tags: ${{ steps.v.outputs.gateway_tags }}
-          cache-from: type=gha,scope=hearth-gateway
-          cache-to: type=gha,mode=max,scope=hearth-gateway
+          cache-from: type=gha,scope=noctaya-gateway
+          cache-to: type=gha,mode=max,scope=noctaya-gateway
           provenance: mode=max
           sbom: true
 
@@ -139,7 +139,7 @@ jobs:
       - name: Package chart at the release version
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          helm package charts/hearth --version "$VERSION" --app-version "$VERSION"
+          helm package charts/noctaya --version "$VERSION" --app-version "$VERSION"
 
       - name: Build release notes (curated highlights + contributor thanks)
         run: |
@@ -157,7 +157,7 @@ jobs:
           } >> release-body.md
 
       - name: Generate chart checksum
-        run: sha256sum hearth-*.tgz > checksums.txt
+        run: sha256sum noctaya-*.tgz > checksums.txt
 
       - name: Attach chart to the GitHub release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
@@ -167,5 +167,5 @@ jobs:
           body_path: release-body.md
           fail_on_unmatched_files: true
           files: |
-            hearth-*.tgz
+            noctaya-*.tgz
             checksums.txt

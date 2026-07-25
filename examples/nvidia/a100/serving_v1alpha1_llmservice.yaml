@@ -1,8 +1,8 @@
-apiVersion: serving.hearth.dev/v1alpha1
+apiVersion: serving.noctaya.io/v1alpha1
 kind: LLMService
 metadata:
   labels:
-    app.kubernetes.io/name: hearth
+    app.kubernetes.io/name: noctaya
     app.kubernetes.io/managed-by: kustomize
   name: qwen3-8b-a100
 spec:

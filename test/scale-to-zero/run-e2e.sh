@@ -27,7 +27,7 @@ if [[ -e "${E2E_KUBECONFIG}" ]]; then
 fi
 
 cluster_created=0
-archive_dir="$(mktemp -d "${TMPDIR:-/tmp}/hearth-e2e-images.XXXXXX")"
+archive_dir="$(mktemp -d "${TMPDIR:-/tmp}/noctaya-e2e-images.XXXXXX")"
 cleanup() {
   status=$?
   trap - EXIT INT TERM
@@ -71,10 +71,10 @@ make load-e2e-images \
   E2E_STUB_IMG="${E2E_STUB_IMG}"
 
 KUBECONFIG="${E2E_KUBECONFIG}" \
-  HEARTH_E2E_KIND_CLUSTER="${E2E_KIND_CLUSTER}" \
-  HEARTH_E2E_KUSTOMIZE="${KUSTOMIZE}" \
-  HEARTH_E2E_MANAGER_IMAGE="${E2E_MANAGER_IMG}" \
-  HEARTH_E2E_GATEWAY_IMAGE="${E2E_GATEWAY_IMG}" \
-  HEARTH_E2E_STUB_IMAGE="${E2E_STUB_IMG}" \
-  HEARTH_E2E_SCALER_MODE="${E2E_SCALER_MODE}" \
+  NOCTAYA_E2E_KIND_CLUSTER="${E2E_KIND_CLUSTER}" \
+  NOCTAYA_E2E_KUSTOMIZE="${KUSTOMIZE}" \
+  NOCTAYA_E2E_MANAGER_IMAGE="${E2E_MANAGER_IMG}" \
+  NOCTAYA_E2E_GATEWAY_IMAGE="${E2E_GATEWAY_IMG}" \
+  NOCTAYA_E2E_STUB_IMAGE="${E2E_STUB_IMG}" \
+  NOCTAYA_E2E_SCALER_MODE="${E2E_SCALER_MODE}" \
   go test -tags=e2e ./test/scale-to-zero/ -v -ginkgo.v -timeout 20m

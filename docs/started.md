@@ -1,7 +1,7 @@
 # Getting started
 
-This guide installs a released Hearth control plane, deploys one hardware profile, and sends a
-request through the scale-to-zero gateway. For contributor workflows, see
+This guide installs Noctaya, deploys one hardware profile, and sends a request through the
+scale-to-zero gateway. For contributor workflows, see
 [CONTRIBUTING.md](../CONTRIBUTING.md). For a complete loop without an accelerator, see
 [Developing without a GPU](no-gpu.md).
 
@@ -9,7 +9,7 @@ request through the scale-to-zero gateway. For contributor workflows, see
 
 Before deploying a model, provide:
 
-- Kubernetes 1.29 or newer for Hearth, with `kubectl` pointing to the intended cluster;
+- Kubernetes 1.29 or newer for Noctaya, with `kubectl` pointing to the intended cluster;
 - Helm;
 - KEDA for autoscaling and scale-to-zero—the linked KEDA 2.20 release requires Kubernetes 1.30 or
   newer;
@@ -17,7 +17,7 @@ Before deploying a model, provide:
 - enough storage for the selected model, or a pre-staged `pvc://` model source; and
 - registry and model-source access required by the selected profile.
 
-Hearth does not install hardware drivers, device plugins, KEDA, model-serving engines, or
+Noctaya does not install hardware drivers, device plugins, KEDA, model-serving engines, or
 schedulers. Check the target before continuing:
 
 ```bash
@@ -25,44 +25,37 @@ kubectl config current-context
 kubectl get nodes
 ```
 
-Use a dedicated development cluster while evaluating Hearth.
+Use a dedicated development cluster while evaluating Noctaya.
 
-## Install Hearth
+## Install Noctaya
 
-The release publishes matching operator and gateway images and attaches a packaged Helm chart to
-the GitHub release. When autoscaling or scale-to-zero is required, install KEDA first by following
-the official [KEDA 2.20 deployment guide](https://keda.sh/docs/2.20/deploy/).
-
-```bash
-HEARTH_VERSION=0.3.0
-
-helm upgrade --install hearth \
-  "https://github.com/hearth-project/hearth/releases/download/v${HEARTH_VERSION}/hearth-${HEARTH_VERSION}.tgz" \
-  --namespace hearth-system \
-  --create-namespace
-
-kubectl rollout status deployment/hearth-controller-manager -n hearth-system
-kubectl get crd inferenceruntimes.serving.hearth.dev llmservices.serving.hearth.dev
-```
-
-From a source checkout at the same version, the equivalent chart command is:
+When autoscaling or scale-to-zero is required, install KEDA first by following the official
+[KEDA 2.20 deployment guide](https://keda.sh/docs/2.20/deploy/). Then install the chart from the
+repository:
 
 ```bash
-helm upgrade --install hearth ./charts/hearth \
-  --namespace hearth-system \
+git clone https://github.com/noctaya/noctaya.git
+cd noctaya
+
+helm upgrade --install noctaya \
+  ./charts/noctaya \
+  --namespace noctaya-system \
   --create-namespace
+
+kubectl rollout status deployment/noctaya-controller-manager -n noctaya-system
+kubectl get crd inferenceruntimes.serving.noctaya.io llmservices.serving.noctaya.io
 ```
 
-KEDA is optional to the reconciler: without its CRD, Hearth still creates the serving resources but
+KEDA is optional to the reconciler: without its CRD, Noctaya still creates the serving resources but
 skips the `ScaledObject`. Autoscaling and scale-to-zero are then disabled.
 
 The chart defaults to KEDA's polling `metrics-api` scaler. To push cold activation immediately,
 enable the ExternalScaler transport in the release chart:
 
 ```bash
-helm upgrade --install hearth \
-  "https://github.com/hearth-project/hearth/releases/download/v${HEARTH_VERSION}/hearth-${HEARTH_VERSION}.tgz" \
-  --namespace hearth-system \
+helm upgrade --install noctaya \
+  ./charts/noctaya \
+  --namespace noctaya-system \
   --create-namespace \
   --set gateway.scalerMode=external-push \
   --set gateway.replicas=1
@@ -100,7 +93,7 @@ confirming the hardware identity with `nvidia-smi`.
 
 `InferenceRuntime` is cluster-scoped. `LLMService` and all generated workloads are created in the
 `ai` namespace. If several equal-priority runtimes for the same vendor are installed, pin
-`spec.runtime.name`; Hearth deliberately rejects an ambiguous vendor-only selection.
+`spec.runtime.name`; Noctaya deliberately rejects an ambiguous vendor-only selection.
 
 All bundled profiles use `NodeLocalPVC`. If the cluster has no default StorageClass, set
 `cache.storageClassName` to a dynamic StorageClass before applying the profile.
@@ -111,7 +104,7 @@ The A10 profile includes the following workload shape. It pins the runtime so de
 depend on vendor-selection priority:
 
 ```yaml
-apiVersion: serving.hearth.dev/v1alpha1
+apiVersion: serving.noctaya.io/v1alpha1
 kind: LLMService
 metadata:
   name: qwen2-5-7b-a10
@@ -210,10 +203,10 @@ back to zero.
 Upgrade with the next versioned chart asset:
 
 ```bash
-HEARTH_VERSION=<new-version>
-helm upgrade hearth \
-  "https://github.com/hearth-project/hearth/releases/download/v${HEARTH_VERSION}/hearth-${HEARTH_VERSION}.tgz" \
-  --namespace hearth-system
+NOCTAYA_VERSION=<new-version>
+helm upgrade noctaya \
+  "https://github.com/noctaya/noctaya/releases/download/v${NOCTAYA_VERSION}/noctaya-${NOCTAYA_VERSION}.tgz" \
+  --namespace noctaya-system
 ```
 
 If the CRDs were previously managed with `kubectl apply` or `make install`, inspect their field
@@ -237,7 +230,7 @@ runtime, so confirm that no other service uses it:
 
 ```bash
 kubectl delete -n ai -k examples/nvidia/a10
-helm uninstall hearth --namespace hearth-system
+helm uninstall noctaya --namespace noctaya-system
 ```
 
 Helm does not remove CRDs from a chart's `crds/` directory during uninstall. Keep them when custom

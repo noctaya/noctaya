@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Question / Discussion
-    url: https://github.com/hearth-project/hearth/discussions
+    url: https://github.com/noctaya/noctaya/discussions
     about: Ask questions and discuss ideas here.
   - name: Security vulnerability
-    url: https://github.com/hearth-project/hearth/blob/main/SECURITY.md
+    url: https://github.com/noctaya/noctaya/blob/main/SECURITY.md
     about: Follow the private reporting options in the security policy; do not open a public issue.

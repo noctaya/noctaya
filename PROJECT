@@ -3,27 +3,27 @@
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
 cliVersion: 4.15.0
-domain: hearth.dev
+domain: noctaya.io
 layout:
 - go.kubebuilder.io/v4
-projectName: hearth
-repo: github.com/hearth-project/hearth
+projectName: noctaya
+repo: github.com/noctaya/noctaya
 resources:
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: hearth.dev
+  domain: noctaya.io
   group: serving
   kind: LLMService
-  path: github.com/hearth-project/hearth/api/v1alpha1
+  path: github.com/noctaya/noctaya/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
   controller: true
-  domain: hearth.dev
+  domain: noctaya.io
   group: serving
   kind: InferenceRuntime
-  path: github.com/hearth-project/hearth/api/v1alpha1
+  path: github.com/noctaya/noctaya/api/v1alpha1
   version: v1alpha1
 version: "3"

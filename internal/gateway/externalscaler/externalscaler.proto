@@ -1,4 +1,4 @@
-// Copyright 2026 The Hearth Authors.
+// Copyright 2026 The Noctaya Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ syntax = "proto3";
 
 package externalscaler;
 
-option go_package = "github.com/hearth-project/hearth/internal/gateway/externalscaler";
+option go_package = "github.com/noctaya/noctaya/internal/gateway/externalscaler";
 
 service ExternalScaler {
   rpc IsActive(ScaledObjectRef) returns (IsActiveResponse) {}

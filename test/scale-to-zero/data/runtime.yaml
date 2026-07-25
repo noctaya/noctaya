@@ -1,4 +1,4 @@
-apiVersion: serving.hearth.dev/v1alpha1
+apiVersion: serving.noctaya.io/v1alpha1
 kind: InferenceRuntime
 metadata:
   name: vllm-stub
@@ -8,7 +8,7 @@ spec:
   priority: 100
   container:
     # Built by `make docker-build-stub` and loaded into kind; a CPU fake of vLLM.
-    image: hearth.dev/vllm-stub:e2e
+    image: noctaya.io/vllm-stub:e2e
     args:
       - --model={{ .Model.Path }}
       - --served-model-name={{ .Service.Name }}
@@ -25,7 +25,7 @@ spec:
   accelerator:
     # A fake extended resource advertised on the kind node via the node-status API,
     # so the backend pod schedules with no GPU and no device plugin.
-    resourceName: hearth.dev/fake-gpu
+    resourceName: noctaya.io/fake-gpu
     sharing:
       supported: false
   health:

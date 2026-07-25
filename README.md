@@ -1,22 +1,22 @@
 <div align="center">
 
-# 🔥 Hearth
+# 🔥 Noctaya
 
 **A minimal, composable LLM serving control plane for private Kubernetes clusters.**
 
-Declarative, scale-to-zero LLM serving for NVIDIA and Ascend runtimes.
+Declarative, scale-to-zero LLM serving across heterogeneous accelerators.
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/github/go-mod/go-version/hearth-project/hearth)](go.mod)
-[![Release](https://img.shields.io/github/v/release/hearth-project/hearth?include_prereleases&label=release&sort=semver)](https://github.com/hearth-project/hearth/releases)
-[![CI](https://github.com/hearth-project/hearth/actions/workflows/test.yml/badge.svg)](https://github.com/hearth-project/hearth/actions/workflows/test.yml)
+[![Go](https://img.shields.io/github/go-mod/go-version/noctaya/noctaya)](go.mod)
+[![Release](https://img.shields.io/github/v/release/noctaya/noctaya?include_prereleases&label=release&sort=semver)](https://github.com/noctaya/noctaya/releases)
+[![CI](https://github.com/noctaya/noctaya/actions/workflows/test.yml/badge.svg)](https://github.com/noctaya/noctaya/actions/workflows/test.yml)
 [![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](ROADMAP.md)
 
 </div>
 
 ## Overview
 
-Hearth is a minimal Kubernetes control plane for serving bursty or long-tail LLM workloads without
+Noctaya is a minimal Kubernetes control plane for serving bursty or long-tail LLM workloads without
 reserving accelerators while they are idle. A lightweight gateway remains available for each model
 while KEDA scales the model backend from zero to the replica count required by current demand. The
 gateway exposes an OpenAI-compatible endpoint and handles cold-start waiting, admission, and
@@ -28,8 +28,8 @@ administrators publish reusable, cluster-scoped `InferenceRuntime` profiles that
 image, device-plugin resource, scheduling constraints, health probes, and lifecycle settings. This
 separates portable serving intent from cluster- and vendor-specific configuration.
 
-From those two resources, Hearth reconciles the backend and gateway workloads, Services, optional
-model cache and prewarm Job, and KEDA autoscaling resources when KEDA is installed. Hearth runs
+From those two resources, Noctaya reconciles the backend and gateway workloads, Services, optional
+model cache and prewarm Job, and KEDA autoscaling resources when KEDA is installed. Noctaya runs
 existing inference engines such as vLLM and integrates with device plugins and schedulers; it does
 not implement inference kernels, accelerator runtimes, or fleet-level serving behavior.
 
@@ -37,11 +37,10 @@ not implement inference kernels, accelerator runtimes, or fleet-level serving be
 
 https://github.com/user-attachments/assets/2d217dad-0280-4509-8793-dfd13ce0cdfa
 
-Kthena keeps a hot model ready while a real request
-activates a Hearth-managed long-tail model from zero and lets it return to zero afterward. See the
-[operational demo](docs/demo.md)
+The [operational walkthrough](docs/demo.md) shows Kthena keeping a hot model ready while a request
+activates a Noctaya-managed long-tail model from zero and lets it return to zero afterward.
 
-## Why Hearth
+## Why Noctaya
 
 - **Scale-to-zero is the center of gravity.** An always-on gateway holds or rejects cold requests
   while KEDA activates the model backend; idle models consume no accelerators.
@@ -53,29 +52,29 @@ activates a Hearth-managed long-tail model from zero and lets it return to zero 
   basic reconciliation continues without it. Prometheus and Grafana are independent, opt-in
   integrations.
 
-| Layer | Owner | Hearth's role |
+| Layer | Owner | Noctaya's role |
 |---|---|---|
 | Inference engine | vLLM and vLLM-Ascend | Runs it; does not implement kernels or inference engines. |
 | Accelerator discovery and scheduling | Vendor device plugins and optional Kubernetes schedulers | Consumes advertised resources and runtime scheduling configuration. |
-| Fleet routing and datacenter-scale serving | Kthena, AIBrix, KServe, llm-d, and similar platforms | Stays outside this scope; Hearth can coexist as a smaller scale-to-zero control plane. |
-| Model lifecycle and scale-to-zero | Hearth | Reconciles serving workloads, caching, gateways, and KEDA autoscaling. |
+| Fleet routing and datacenter-scale serving | Kthena, AIBrix, KServe, llm-d, and similar platforms | Stays outside this scope; Noctaya can coexist as a smaller scale-to-zero control plane. |
+| Model lifecycle and scale-to-zero | Noctaya | Reconciles serving workloads, caching, gateways, and KEDA autoscaling. |
 
-### Hearth and Kthena
+### Noctaya and Kthena
 
 [Kthena](https://github.com/volcano-sh/kthena), a [Volcano](https://volcano.sh/) sub-project, is a
 Kubernetes-native AI serving **platform**: multi-model routing, KV-cache-aware scheduling,
 prefill/decode disaggregation, and fleet-scale autoscaling, with first-class NPU support. If you run
-a serious multi-model serving estate, **use Kthena — it's excellent.** Hearth lives at the other end
+a serious multi-model serving estate, **use Kthena — it's excellent.** Noctaya lives at the other end
 of the same axis: a handful of occasionally-used models on a handful of cards, where you want the
 smallest possible footprint — one manifest, KEDA, done. The two compose naturally on one cluster:
-**hot, high-traffic models on Kthena; the long tail scaled to zero with Hearth**, on the same
+**hot, high-traffic models on Kthena; the long tail scaled to zero with Noctaya**, on the same
 (Volcano-schedulable) silicon.
 
 ## Quick Start
 
 ### Prerequisites
 
-Before installing Hearth, prepare:
+Before installing Noctaya, prepare:
 
 - Kubernetes >= 1.30;
 - Helm > 3;
@@ -85,22 +84,23 @@ Before installing Hearth, prepare:
 ### Install with Helm
 
 Install KEDA first by following its official [deployment guide](https://keda.sh/docs/2.20/deploy/)
-when autoscaling or scale-to-zero is required. Then install the released Hearth chart:
+when autoscaling or scale-to-zero is required. Then install Noctaya from the repository:
 
 ```bash
-HEARTH_VERSION=0.3.0
+git clone https://github.com/noctaya/noctaya.git
+cd noctaya
 
-helm upgrade --install hearth \
-  "https://github.com/hearth-project/hearth/releases/download/v${HEARTH_VERSION}/hearth-${HEARTH_VERSION}.tgz" \
-  --namespace hearth-system \
+helm upgrade --install noctaya \
+  ./charts/noctaya \
+  --namespace noctaya-system \
   --create-namespace
 ```
 
 Verify the operator and CRDs:
 
 ```bash
-kubectl rollout status deployment/hearth-controller-manager -n hearth-system
-kubectl get crd inferenceruntimes.serving.hearth.dev llmservices.serving.hearth.dev
+kubectl rollout status deployment/noctaya-controller-manager -n noctaya-system
+kubectl get crd inferenceruntimes.serving.noctaya.io llmservices.serving.noctaya.io
 ```
 
 ### Deploy an example
@@ -127,7 +127,7 @@ and a KEDA `ScaledObject` when KEDA is installed.
 
 ```mermaid
 flowchart LR
-  client([Client]) -->|OpenAI API| gateway[Hearth gateway]
+  client([Client]) -->|OpenAI API| gateway[Noctaya gateway]
   gateway --> backend[Model backend 0..N]
   keda[KEDA] -->|Push activation or poll queue| gateway
   keda -->|Scale| backend

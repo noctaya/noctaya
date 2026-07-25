@@ -1,8 +1,8 @@
-apiVersion: serving.hearth.dev/v1alpha1
+apiVersion: serving.noctaya.io/v1alpha1
 kind: InferenceRuntime
 metadata:
   labels:
-    app.kubernetes.io/name: hearth
+    app.kubernetes.io/name: noctaya
     app.kubernetes.io/managed-by: kustomize
   name: vllm-ascend-310p-pro
 # Atlas 300I Pro profile. Physical validation is still required because vLLM-Ascend
@@ -29,7 +29,7 @@ spec:
       supported: false
     nodeSelector:
       accelerator: huawei-Ascend310P
-      serving.hearth.dev/ascend-product: atlas-300i-pro
+      serving.noctaya.io/ascend-product: atlas-300i-pro
   health:
     readiness:
       httpGet:

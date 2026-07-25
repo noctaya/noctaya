@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
+	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
 )
 
 func rt(name, vendor string, priority int32) servingv1alpha1.InferenceRuntime {

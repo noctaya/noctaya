@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ type InferenceRuntimeSpec struct {
 	Lifecycle RuntimeLifecycle `json:"lifecycle,omitempty"`
 
 	// metrics describes optional runtime telemetry for external integrations.
-	// Hearth autoscaling uses the gateway queue and does not consume these fields.
+	// Noctaya autoscaling uses the gateway queue and does not consume these fields.
 	// +optional
 	Metrics RuntimeMetrics `json:"metrics,omitempty"`
 }
@@ -148,7 +148,7 @@ type RuntimeHealth struct {
 
 // RuntimeLifecycle configures graceful termination of serving pods.
 type RuntimeLifecycle struct {
-	// terminationGracePeriodSeconds is the base pod shutdown budget; Hearth widens
+	// terminationGracePeriodSeconds is the base pod shutdown budget; Noctaya widens
 	// it when the configured drain timeout requires more time.
 	// +kubebuilder:validation:Minimum=1
 	// +optional

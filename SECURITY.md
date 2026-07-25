@@ -1,12 +1,12 @@
 # Security Policy
 
-Hearth is alpha software that reconciles Kubernetes workloads and proxies inference traffic.
+Noctaya is alpha software that reconciles Kubernetes workloads and proxies inference traffic.
 Security reports may affect cluster permissions, model or request data, generated workloads, or
 published release artifacts. Please report suspected vulnerabilities privately.
 
 ## Supported versions
 
-Hearth does not maintain release branches or backport fixes during the alpha phase. Fixes land on
+Noctaya does not maintain release branches or backport fixes during the alpha phase. Fixes land on
 `main` and are included in the next release; users should upgrade to the newest published release.
 
 | Channel | Support |
@@ -19,16 +19,16 @@ Hearth does not maintain release branches or backport fixes during the alpha pha
 
 Please report vulnerabilities in:
 
-- the Hearth operator, controllers, gateway, and model-resolution or workload-building logic;
+- the Noctaya operator, controllers, gateway, and model-resolution or workload-building logic;
 - the `LLMService` and `InferenceRuntime` APIs when their behavior exposes credentials, data, or
   cluster privileges;
 - the Helm chart, Kustomize manifests, RBAC, official container images, or release workflow; and
-- Hearth's integration behavior when it makes an otherwise upstream issue exploitable through a
-  Hearth-managed deployment.
+- Noctaya's integration behavior when it makes an otherwise upstream issue exploitable through a
+  Noctaya-managed deployment.
 
 Vulnerabilities solely in Kubernetes, KEDA, vLLM or a vendor plugin, an accelerator driver or
 device plugin, Volcano, or another third-party component should normally be reported to that
-project. If you are unsure whether Hearth contributes to the impact, report it privately here and
+project. If you are unsure whether Noctaya contributes to the impact, report it privately here and
 we will help route it.
 
 The v0.3.0 gateway intentionally has no built-in authentication. Exposing it directly outside a
@@ -39,9 +39,9 @@ documented alpha limitation, not a previously unknown vulnerability.
 
 **Do not open a public issue or discussion containing vulnerability details.**
 
-Use [GitHub private vulnerability reporting](https://github.com/hearth-project/hearth/security/advisories/new)
+Use [GitHub private vulnerability reporting](https://github.com/noctaya/noctaya/security/advisories/new)
 when the repository's **Report a vulnerability** form is available. If it is unavailable, email
-`jzlyy68@gmail.com` with `SECURITY: Hearth` in the subject. Do not send credentials, private model
+`jzlyy68@gmail.com` with `SECURITY: Noctaya` in the subject. Do not send credentials, private model
 data, or unredacted production logs; we can arrange how to exchange sensitive evidence after the
 initial contact.
 

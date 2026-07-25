@@ -22,7 +22,7 @@ Shared evidence requirements are in the [Ascend hardware validation guide](ascen
 | Host OS | Ubuntu |
 | Device allocation | Standard non-mixed, whole-device mode |
 | Kubernetes resource | `huawei.com/Ascend910` |
-| Node labels | `accelerator=huawei-Ascend910`, `serving.hearth.dev/ascend-product=ascend-910b3` |
+| Node labels | `accelerator=huawei-Ascend910`, `serving.noctaya.io/ascend-product=ascend-910b3` |
 | Runtime image | `quay.io/ascend/vllm-ascend:v0.21.0rc1` |
 | Smoke model | `Qwen/Qwen2.5-0.5B-Instruct` from ModelScope |
 | Context limit | Explicit `--max-model-len=2048` |
@@ -43,7 +43,7 @@ The complete operator, device-plugin, gateway, KEDA, and vLLM path passed on thi
 | Ascend Device Plugin | MindCluster `v7.3.0` |
 | Helm / KEDA | Helm `v4.2.3`; KEDA `2.20.1` |
 | vLLM-Ascend image | `v0.21.0rc1` with `vllm 0.21.0` |
-| Hearth images | Operator `0.2.0-rc.1`; gateway `0.2.0-rc.1` |
+| Noctaya images | Operator `0.2.0-rc.1`; gateway `0.2.0-rc.1` |
 | Model / cache | `Qwen/Qwen2.5-0.5B-Instruct`; NodeLocalPVC on a dedicated 120 GB ext4 data disk |
 
 Observed functional results:
@@ -107,23 +107,23 @@ until the node resource and plugin health both pass.
 
 ## 3. Label the NPU node
 
-MindCluster's standard label identifies the Ascend 910 family. The Hearth label restricts this
+MindCluster's standard label identifies the Ascend 910 family. The Noctaya label restricts this
 profile to the physically validated 910B3 product:
 
 ```bash
 kubectl label node <npu-node> accelerator=huawei-Ascend910 --overwrite
-kubectl label node <npu-node> serving.hearth.dev/ascend-product=ascend-910b3 --overwrite
-kubectl get node <npu-node> -L accelerator,serving.hearth.dev/ascend-product
+kubectl label node <npu-node> serving.noctaya.io/ascend-product=ascend-910b3 --overwrite
+kubectl get node <npu-node> -L accelerator,serving.noctaya.io/ascend-product
 ```
 
-## 4. Prepare Hearth
+## 4. Prepare Noctaya
 
-Use a dedicated cluster and namespace. Confirm the context, then install KEDA and Hearth by
+Use a dedicated cluster and namespace. Confirm the context, then install KEDA and Noctaya by
 following [Getting started](../started.md):
 
 ```bash
 kubectl config current-context
-kubectl create namespace hearth-910b-validation
+kubectl create namespace noctaya-910b-validation
 ```
 
 If the cluster has no default dynamic StorageClass, set `cache.storageClassName` in the service
@@ -137,17 +137,17 @@ Verify a test PVC on the data disk before downloading model weights.
 ```bash
 SERVICE=qwen-910b-validation
 
-kubectl apply -k examples/ascend/910b3 -n hearth-910b-validation
+kubectl apply -k examples/ascend/910b3 -n noctaya-910b-validation
 kubectl get llmservice,pvc,job,deploy,pod,scaledobject \
-  -n hearth-910b-validation -w
+  -n noctaya-910b-validation -w
 ```
 
 Wait for the prewarm Job to complete and KEDA to hold the backend at zero. During activation,
 confirm that the backend Pod lands on the labeled node and requests one device:
 
 ```bash
-kubectl get pod -n hearth-910b-validation \
-  -l "serving.hearth.dev/llmservice=$SERVICE" \
+kubectl get pod -n noctaya-910b-validation \
+  -l "serving.noctaya.io/llmservice=$SERVICE" \
   -o custom-columns='NAME:.metadata.name,NODE:.spec.nodeName,NPU:.spec.containers[0].resources.limits.huawei\.com/Ascend910'
 ```
 
@@ -156,13 +156,13 @@ kubectl get pod -n hearth-910b-validation \
 Watch the backend Deployment:
 
 ```bash
-kubectl get deployment "$SERVICE" -n hearth-910b-validation -w
+kubectl get deployment "$SERVICE" -n noctaya-910b-validation -w
 ```
 
 In another terminal, expose the gateway:
 
 ```bash
-kubectl port-forward -n hearth-910b-validation "service/$SERVICE" 8080:80
+kubectl port-forward -n noctaya-910b-validation "service/$SERVICE" 8080:80
 ```
 
 Send a streaming request. The gateway may emit heartbeat comments while the model loads:
@@ -170,7 +170,7 @@ Send a streaming request. The gateway may emit heartbeat comments while the mode
 ```bash
 curl -N http://127.0.0.1:8080/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -d "{\"model\":\"$SERVICE\",\"stream\":true,\"max_tokens\":32,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with: Hearth 910B validation passed\"}]}"
+  -d "{\"model\":\"$SERVICE\",\"stream\":true,\"max_tokens\":32,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with: Noctaya 910B validation passed\"}]}"
 ```
 
 Record idle replicas at zero, the cold request causing `0 -> 1`, Loading-to-Ready status, a
@@ -185,7 +185,7 @@ confirm that the client receives `[DONE]` with a normal finish reason before ter
 ### Backend remains Pending
 
 ```bash
-kubectl describe pod -n hearth-910b-validation <backend-pod>
+kubectl describe pod -n noctaya-910b-validation <backend-pod>
 kubectl get nodes -L accelerator
 kubectl describe node <npu-node> | grep -A5 -B5 Ascend910
 ```
@@ -195,8 +195,8 @@ Check the advertised resource, node label, taints, device-plugin health, and cac
 ### Prewarm fails
 
 ```bash
-kubectl logs -n hearth-910b-validation job/qwen-910b-validation-prewarm
-kubectl describe pvc -n hearth-910b-validation qwen-910b-validation-cache
+kubectl logs -n noctaya-910b-validation job/qwen-910b-validation-prewarm
+kubectl describe pvc -n noctaya-910b-validation qwen-910b-validation-cache
 ```
 
 Check ModelScope egress, DNS, proxy settings, StorageClass availability, disk capacity, and runtime
@@ -205,9 +205,9 @@ image compatibility.
 ### Backend never becomes Ready
 
 ```bash
-kubectl logs -n hearth-910b-validation deployment/qwen-910b-validation --all-containers
-kubectl describe pod -n hearth-910b-validation \
-  -l serving.hearth.dev/llmservice=qwen-910b-validation
+kubectl logs -n noctaya-910b-validation deployment/qwen-910b-validation --all-containers
+kubectl describe pod -n noctaya-910b-validation \
+  -l serving.noctaya.io/llmservice=qwen-910b-validation
 ```
 
 Check the image, driver, firmware, CANN compatibility, driver projections, device assignment, and
@@ -223,7 +223,7 @@ version without checking compatibility. Verify the driver again after reboot.
 
 ```bash
 npu-smi info
-kubectl get pod -n hearth-910b-validation <backend-pod> -o yaml
+kubectl get pod -n noctaya-910b-validation <backend-pod> -o yaml
 ```
 
 Check for competing NPU processes and confirm the model and context limit. vLLM reserves most

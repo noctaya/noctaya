@@ -2,12 +2,12 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app.kubernetes.io/name: hearth
+    app.kubernetes.io/name: noctaya
     app.kubernetes.io/managed-by: kustomize
   name: inferenceruntime-editor-role
 rules:
 - apiGroups:
-  - serving.hearth.dev
+  - serving.noctaya.io
   resources:
   - inferenceruntimes
   verbs:
@@ -19,7 +19,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - serving.hearth.dev
+  - serving.noctaya.io
   resources:
   - inferenceruntimes/status
   verbs:

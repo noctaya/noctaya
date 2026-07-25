@@ -1,4 +1,4 @@
-apiVersion: serving.hearth.dev/v1alpha1
+apiVersion: serving.noctaya.io/v1alpha1
 kind: InferenceRuntime
 metadata:
   name: vllm-stub-drain
@@ -7,7 +7,7 @@ spec:
   vendor: nvidia
   priority: 100
   container:
-    image: hearth.dev/vllm-stub:e2e
+    image: noctaya.io/vllm-stub:e2e
     args: ["--model={{ .Model.Path }}"]
     env:
       - name: STUB_STARTUP_DELAY
@@ -18,7 +18,7 @@ spec:
       name: http
       containerPort: 8000
   accelerator:
-    resourceName: hearth.dev/fake-gpu
+    resourceName: noctaya.io/fake-gpu
     sharing:
       supported: false
   health:
@@ -33,15 +33,15 @@ spec:
     terminationGracePeriodSeconds: 90
     preStopDrain: true
 ---
-apiVersion: serving.hearth.dev/v1alpha1
+apiVersion: serving.noctaya.io/v1alpha1
 kind: LLMService
 metadata:
   name: stub-drain
-  namespace: hearth-e2e
+  namespace: noctaya-e2e
 spec:
   model:
     source:
-      uri: hf://hearth/stub-model
+      uri: hf://noctaya/stub-model
   runtime:
     name: vllm-stub-drain
   resources:

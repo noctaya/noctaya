@@ -49,7 +49,7 @@ const sidebars = {
     {
       type: 'doc',
       id: 'docs/demo',
-      label: 'Operational demo',
+      label: 'Operational walkthrough',
     },
     {
       type: 'category',

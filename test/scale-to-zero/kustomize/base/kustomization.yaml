@@ -6,7 +6,7 @@ resources:
 
 images:
   - name: controller
-    newName: hearth.dev/hearth
+    newName: noctaya.io/noctaya
     newTag: e2e
 
 patches:
@@ -20,6 +20,6 @@ patches:
           - --metrics-bind-address=:8443
           - --health-probe-bind-address=:8081
           - --leader-elect
-          - --gateway-image=hearth.dev/hearth-gateway:e2e
+          - --gateway-image=noctaya.io/noctaya-gateway:e2e
           - --gateway-replicas=1
           - --scaler-mode=metrics-api

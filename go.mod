@@ -1,4 +1,4 @@
-module github.com/hearth-project/hearth
+module github.com/noctaya/noctaya
 
 go 1.26.0
 

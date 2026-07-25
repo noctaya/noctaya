@@ -1,6 +1,6 @@
 ---
 name: Question
-about: Question relating to Hearth.
+about: Question relating to Noctaya.
 labels: kind/question
 
 ---
@@ -10,6 +10,6 @@ labels: kind/question
 **What do you think about this question?**:
 
 **Environment**:
-- Hearth version:
+- Noctaya version:
 - Kubernetes version:
 - Others:

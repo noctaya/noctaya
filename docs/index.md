@@ -1,13 +1,13 @@
-# Hearth documentation
+# Noctaya documentation
 
-Hearth is a minimal, composable LLM serving control plane for private Kubernetes clusters. It
+Noctaya is a minimal, composable LLM serving control plane for private Kubernetes clusters. It
 turns an `LLMService` and a reusable `InferenceRuntime` into a cold-start-aware gateway, a model
 backend that can scale to zero, optional model caching and prewarming, and KEDA autoscaling
 resources.
 
 ## Start here
 
-- [Getting started](started.md) installs Hearth, deploys a hardware profile, and exercises the
+- [Getting started](started.md) installs Noctaya, deploys a hardware profile, and exercises the
   complete request path.
 - [Examples and model configuration](../examples/README.md) covers NVIDIA and Ascend profiles and
   explains how to change the served model.
@@ -22,8 +22,8 @@ resources.
   path on Kind.
 - [Hardware validation](ascend/ascend-validation.md) explains the evidence required for physical
   accelerator claims.
-- [Operational demo](demo.md) reproduces the Hearth and Kthena lifecycle shown in the project
-  video.
+- [Operational walkthrough](demo.md) reproduces the Noctaya and Kthena lifecycle with Kubernetes
+  commands.
 
 ## Project
 

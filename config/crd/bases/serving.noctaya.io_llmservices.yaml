@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.21.0
-  name: llmservices.serving.hearth.dev
+  name: llmservices.serving.noctaya.io
 spec:
-  group: serving.hearth.dev
+  group: serving.noctaya.io
   names:
     kind: LLMService
     listKind: LLMServiceList
@@ -254,7 +254,7 @@ spec:
                   drainTimeout:
                     default: 2m
                     description: |-
-                      drainTimeout is the pre-stop wait for in-flight requests. Hearth widens the
+                      drainTimeout is the pre-stop wait for in-flight requests. Noctaya widens the
                       pod termination grace period when this timeout needs more room.
                     type: string
                   max:

@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,17 +23,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
+	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
 )
 
 const ServingContainerName = "serving"
 
 const (
 	managedByLabel  = "app.kubernetes.io/managed-by"
-	managedByValue  = "hearth"
+	managedByValue  = "noctaya"
 	nameLabel       = "app.kubernetes.io/name"
-	llmServiceLabel = "serving.hearth.dev/llmservice"
-	runtimeLabel    = "serving.hearth.dev/runtime"
+	llmServiceLabel = "serving.noctaya.io/llmservice"
+	runtimeLabel    = "serving.noctaya.io/runtime"
 
 	volcanoQueueAnnotation = "scheduling.volcano.sh/queue-name"
 )
@@ -89,7 +89,7 @@ func BuildDeployment(a BackendAdapter, svc *servingv1alpha1.LLMService, rt *serv
 		},
 	}
 	// Volcano's podgroup controller derives the queue from this pod annotation;
-	// Hearth never creates PodGroups itself (reuse the scheduler, don't replace it).
+	// Noctaya never creates PodGroups itself (reuse the scheduler, don't replace it).
 	if accel.Queue != "" {
 		dep.Spec.Template.Annotations = map[string]string{volcanoQueueAnnotation: accel.Queue}
 	}

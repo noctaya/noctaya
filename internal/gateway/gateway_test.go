@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/hearth-project/hearth/internal/gateway"
+	"github.com/noctaya/noctaya/internal/gateway"
 )
 
 // stubBackend is a fake vLLM: /health reflects a toggle, everything else echoes.
@@ -169,9 +169,9 @@ func TestExposesPrometheusMetrics(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	defer func() { _ = m.Body.Close() }()
 	body, _ := io.ReadAll(m.Body)
-	g.Expect(string(body)).To(ContainSubstring("hearth_gateway_requests_total"))
-	g.Expect(string(body)).To(ContainSubstring("hearth_gateway_activation_wait_seconds"))
-	g.Expect(string(body)).To(ContainSubstring("hearth_gateway_demand"))
+	g.Expect(string(body)).To(ContainSubstring("noctaya_gateway_requests_total"))
+	g.Expect(string(body)).To(ContainSubstring("noctaya_gateway_activation_wait_seconds"))
+	g.Expect(string(body)).To(ContainSubstring("noctaya_gateway_demand"))
 }
 
 func TestKeepaliveStreamsHeartbeatsThenResponse(t *testing.T) {
@@ -232,9 +232,9 @@ func TestKeepaliveTimeoutMetricsMatchCommittedResponse(t *testing.T) {
 	metricsResponse := httptest.NewRecorder()
 	gw.Handler().ServeHTTP(metricsResponse, metricsRequest)
 	metricsText := metricsResponse.Body.String()
-	g.Expect(metricsText).To(ContainSubstring(`hearth_gateway_requests_total{code="200"} 1`))
-	g.Expect(metricsText).NotTo(ContainSubstring(`hearth_gateway_requests_total{code="503"}`))
-	g.Expect(metricsText).To(ContainSubstring(`hearth_gateway_rejections_total{reason="activation_timeout"} 1`))
+	g.Expect(metricsText).To(ContainSubstring(`noctaya_gateway_requests_total{code="200"} 1`))
+	g.Expect(metricsText).NotTo(ContainSubstring(`noctaya_gateway_requests_total{code="503"}`))
+	g.Expect(metricsText).To(ContainSubstring(`noctaya_gateway_rejections_total{reason="activation_timeout"} 1`))
 }
 
 func TestCanceledColdRequestIsNotActivationTimeout(t *testing.T) {

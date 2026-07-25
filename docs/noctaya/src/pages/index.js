@@ -27,7 +27,7 @@ const capabilities = [
 
 const boundaries = [
   ['You declare', 'Model, runtime, resources, cache, scaling, endpoint'],
-  ['Hearth owns', 'Workload lifecycle, cold activation, admission, drain'],
+  ['Noctaya owns', 'Workload lifecycle, cold activation, admission, drain'],
   ['Your stack owns', 'Inference kernels, device plugins, schedulers, monitoring'],
 ];
 
@@ -54,7 +54,7 @@ function Home() {
       description="A minimal, composable LLM serving control plane for private Kubernetes clusters."
     >
       <Head>
-        <meta property="og:title" content="Hearth — Scale-to-zero LLM serving" />
+        <meta property="og:title" content="Noctaya — Scale-to-zero LLM serving" />
         <meta
           property="og:description"
           content="Release idle accelerators without giving up a stable, cold-start-aware inference endpoint."
@@ -75,7 +75,7 @@ function Home() {
                 <span>Release the accelerator.</span>
               </h1>
               <p className={styles.heroLead}>
-                Hearth is a minimal control plane for bursty LLM workloads on private
+                Noctaya is a minimal control plane for bursty LLM workloads on private
                 Kubernetes clusters—declarative model lifecycle, cold-start-aware traffic, and
                 reusable runtime profiles without a fleet-scale platform.
               </p>
@@ -95,7 +95,7 @@ function Home() {
               </div>
             </div>
 
-            <div className={styles.terminalWrap} aria-label="Hearth scale-to-zero lifecycle">
+            <div className={styles.terminalWrap} aria-label="Noctaya scale-to-zero lifecycle">
               <div className={styles.terminal}>
                 <div className={styles.terminalTop}>
                   <div className={styles.windowDots}><i /><i /><i /></div>
@@ -157,10 +157,10 @@ function Home() {
         <section className={styles.capabilitySection}>
           <div className={styles.sectionShell}>
             <div className={styles.sectionIntro}>
-              <p className={styles.kicker}>Why Hearth</p>
+              <p className={styles.kicker}>Why Noctaya</p>
               <h2>Small control plane. Complete cold-start lifecycle.</h2>
               <p>
-                Scaling a Deployment to zero is the easy part. Hearth concentrates on what
+                Scaling a Deployment to zero is the easy part. Noctaya concentrates on what
                 happens when demand returns.
               </p>
             </div>
@@ -183,7 +183,7 @@ function Home() {
               <h2>Use Kubernetes as the contract.</h2>
               <p>
                 Application owners declare serving intent. Cluster administrators publish
-                reusable runtime profiles. Hearth translates both into the workloads and
+                reusable runtime profiles. Noctaya translates both into the workloads and
                 lifecycle resources your cluster already understands.
               </p>
               <div className={styles.boundaryList}>
@@ -206,7 +206,7 @@ function Home() {
               </div>
               <div className={styles.flowConnector}><i /></div>
               <div className={styles.flowCore}>
-                <div><strong>Hearth</strong><span>reconcile · activate · drain</span></div>
+                <div><strong>Noctaya</strong><span>reconcile · activate · drain</span></div>
               </div>
               <div className={styles.flowConnector}><i /></div>
               <div className={styles.flowOutput}>
@@ -219,7 +219,7 @@ function Home() {
           </div>
         </section>
 
-        <section className={styles.kthenaSection} id="hearth-and-kthena">
+        <section className={styles.kthenaSection} id="noctaya-and-kthena">
           <div className={styles.sectionShell}>
             <div className={styles.policyHeader}>
               <p className={styles.kicker}>One cluster, two serving policies</p>
@@ -238,7 +238,7 @@ function Home() {
               <div className={styles.policyPlus}>+</div>
               <article>
                 <span className={styles.policyTag}>Long tail</span>
-                <h3>Hearth</h3>
+                <h3>Noctaya</h3>
                 <p>
                   A small declarative control plane for occasional models that should release
                   their accelerators.
@@ -247,7 +247,7 @@ function Home() {
               </article>
             </div>
             <Link className={styles.textLink} to="/docs/demo">
-              See the operational demo <ArrowIcon />
+              See the operational walkthrough <ArrowIcon />
             </Link>
           </div>
         </section>
@@ -255,7 +255,7 @@ function Home() {
         <section className={styles.ctaSection}>
           <div className={styles.ctaCard}>
             <div>
-              <p className={styles.kicker}>Try Hearth</p>
+              <p className={styles.kicker}>Try Noctaya</p>
               <h2>Start with one model and one runtime.</h2>
               <p>Install the chart, select a hardware profile, and watch the backend wake from zero.</p>
             </div>

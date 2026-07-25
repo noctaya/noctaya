@@ -1,4 +1,4 @@
-// Copyright 2026 The Hearth Authors.
+// Copyright 2026 The Noctaya Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -446,7 +446,7 @@ const file_externalscaler_proto_rawDesc = "" +
 	"\x0eStreamIsActive\x12\x1f.externalscaler.ScaledObjectRef\x1a .externalscaler.IsActiveResponse\"\x000\x01\x12Y\n" +
 	"\rGetMetricSpec\x12\x1f.externalscaler.ScaledObjectRef\x1a%.externalscaler.GetMetricSpecResponse\"\x00\x12U\n" +
 	"\n" +
-	"GetMetrics\x12!.externalscaler.GetMetricsRequest\x1a\".externalscaler.GetMetricsResponse\"\x00BBZ@github.com/hearth-project/hearth/internal/gateway/externalscalerb\x06proto3"
+	"GetMetrics\x12!.externalscaler.GetMetricsRequest\x1a\".externalscaler.GetMetricsResponse\"\x00B<Z:github.com/noctaya/noctaya/internal/gateway/externalscalerb\x06proto3"
 
 var (
 	file_externalscaler_proto_rawDescOnce sync.Once

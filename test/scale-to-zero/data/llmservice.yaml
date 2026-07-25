@@ -1,12 +1,12 @@
-apiVersion: serving.hearth.dev/v1alpha1
+apiVersion: serving.noctaya.io/v1alpha1
 kind: LLMService
 metadata:
   name: stub-svc
-  namespace: hearth-e2e
+  namespace: noctaya-e2e
 spec:
   model:
     source:
-      uri: hf://hearth/stub-model
+      uri: hf://noctaya/stub-model
   runtime:
     name: vllm-stub
   resources:

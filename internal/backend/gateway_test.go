@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,8 +23,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
-	"github.com/hearth-project/hearth/internal/backend"
+	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
+	"github.com/noctaya/noctaya/internal/backend"
 )
 
 func gatewaySvc() *servingv1alpha1.LLMService {
@@ -56,7 +56,7 @@ func TestGatewayPointsAtBackendService(t *testing.T) {
 	env := dep.Spec.Template.Spec.Containers[0].Env
 	var backendURL string
 	for _, e := range env {
-		if e.Name == "HEARTH_BACKEND_URL" {
+		if e.Name == "NOCTAYA_BACKEND_URL" {
 			backendURL = e.Value
 		}
 	}
@@ -69,7 +69,7 @@ func TestExternalPushGatewayExposesInternalScaler(t *testing.T) {
 	dep := backend.BuildGatewayDeployment(svc, "img", 1, backend.ScalerModeExternalPush)
 	container := dep.Spec.Template.Spec.Containers[0]
 	g.Expect(container.Env).To(ContainElement(corev1.EnvVar{
-		Name:  "HEARTH_SCALER_LISTEN_ADDR",
+		Name:  "NOCTAYA_SCALER_LISTEN_ADDR",
 		Value: ":9090",
 	}))
 	g.Expect(container.Ports).To(ContainElement(corev1.ContainerPort{
@@ -88,7 +88,7 @@ func TestMetricsAPIGatewayDoesNotExposeScalerPort(t *testing.T) {
 	g := NewWithT(t)
 	dep := backend.BuildGatewayDeployment(gatewaySvc(), "img", 1, backend.ScalerModeMetricsAPI)
 	container := dep.Spec.Template.Spec.Containers[0]
-	g.Expect(container.Env).NotTo(ContainElement(HaveField("Name", "HEARTH_SCALER_LISTEN_ADDR")))
+	g.Expect(container.Env).NotTo(ContainElement(HaveField("Name", "NOCTAYA_SCALER_LISTEN_ADDR")))
 	g.Expect(container.Ports).NotTo(ContainElement(HaveField("Name", "grpc")))
 }
 
@@ -106,8 +106,8 @@ func TestServicesExposeMetricsDiscoveryContract(t *testing.T) {
 		backend.BuildGatewayService(svc),
 	}
 	for _, service := range services {
-		g.Expect(service.Labels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "hearth"))
-		g.Expect(service.Labels).To(HaveKeyWithValue("serving.hearth.dev/llmservice", svc.Name))
+		g.Expect(service.Labels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "noctaya"))
+		g.Expect(service.Labels).To(HaveKeyWithValue("serving.noctaya.io/llmservice", svc.Name))
 		g.Expect(service.Spec.Ports).To(HaveLen(1))
 		g.Expect(service.Spec.Ports[0].Name).To(Equal("http"))
 	}
@@ -136,13 +136,13 @@ func TestOptionalObservabilityAssetsMatchDiscoveryContract(t *testing.T) {
 	g.Expect(monitor.Spec.Endpoints).To(HaveLen(1))
 	g.Expect(monitor.Spec.Endpoints[0].Path).To(Equal("/metrics"))
 	g.Expect(monitor.Spec.Endpoints[0].Port).To(Equal("http"))
-	g.Expect(monitor.Spec.Selector.MatchLabels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "hearth"))
+	g.Expect(monitor.Spec.Selector.MatchLabels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "noctaya"))
 	g.Expect(monitor.Spec.Selector.MatchExpressions).To(ContainElement(And(
-		HaveField("Key", "serving.hearth.dev/llmservice"),
+		HaveField("Key", "serving.noctaya.io/llmservice"),
 		HaveField("Operator", "Exists"),
 	)))
 
 	dashboard := decodeExample[map[string]any](t,
-		"../../examples/observability/grafana/hearth-overview.json")
-	g.Expect(dashboard).To(HaveKeyWithValue("uid", "hearth-overview"))
+		"../../examples/observability/grafana/noctaya-overview.json")
+	g.Expect(dashboard).To(HaveKeyWithValue("uid", "noctaya-overview"))
 }

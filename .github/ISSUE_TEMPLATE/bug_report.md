@@ -15,6 +15,6 @@ assignees: ""
 <!-- Minimal steps and/or YAML manifests (LLMService / InferenceRuntime). -->
 
 **Environment**
-- Hearth version:
+- Noctaya version:
 - Kubernetes version:
 - Accelerator + device plugin:

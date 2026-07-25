@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -31,9 +31,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
-	"github.com/hearth-project/hearth/internal/backend"
-	"github.com/hearth-project/hearth/internal/backend/registry"
+	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
+	"github.com/noctaya/noctaya/internal/backend"
+	"github.com/noctaya/noctaya/internal/backend/registry"
 )
 
 var _ = Describe("LLMService Controller", func() {
@@ -53,7 +53,7 @@ var _ = Describe("LLMService Controller", func() {
 				Client:       k8sClient,
 				Scheme:       k8sClient.Scheme(),
 				Backends:     registry.New(),
-				GatewayImage: "ghcr.io/hearth-project/hearth-gateway:test",
+				GatewayImage: "ghcr.io/noctaya/noctaya-gateway:test",
 			}
 		}
 
@@ -111,7 +111,7 @@ var _ = Describe("LLMService Controller", func() {
 
 			backendSvc := &corev1.Service{}
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: svcName + "-backend", Namespace: namespace}, backendSvc)).To(Succeed())
-			Expect(backendSvc.Spec.Selector).To(HaveKeyWithValue("serving.hearth.dev/llmservice", svcName))
+			Expect(backendSvc.Spec.Selector).To(HaveKeyWithValue("serving.noctaya.io/llmservice", svcName))
 
 			gwDep := &appsv1.Deployment{}
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: svcName + "-gateway", Namespace: namespace}, gwDep)).To(Succeed())
@@ -119,7 +119,7 @@ var _ = Describe("LLMService Controller", func() {
 			Expect(*gwDep.Spec.Replicas).To(Equal(int32(1))) // default: crisp scale-from-zero
 			gwSvc := &corev1.Service{}
 			Expect(k8sClient.Get(ctx, key, gwSvc)).To(Succeed())
-			Expect(gwSvc.Spec.Selector).To(HaveKeyWithValue("serving.hearth.dev/gateway", svcName))
+			Expect(gwSvc.Spec.Selector).To(HaveKeyWithValue("serving.noctaya.io/gateway", svcName))
 
 			pvc := &corev1.PersistentVolumeClaim{}
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: svcName + "-cache", Namespace: namespace}, pvc)).To(Succeed())
@@ -187,7 +187,7 @@ var _ = Describe("LLMService Controller", func() {
 			gwDep := &appsv1.Deployment{}
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: svcName + "-gateway", Namespace: namespace}, gwDep)).To(Succeed())
 			container := gwDep.Spec.Template.Spec.Containers[0]
-			Expect(container.Env).To(ContainElement(corev1.EnvVar{Name: "HEARTH_SCALER_LISTEN_ADDR", Value: ":9090"}))
+			Expect(container.Env).To(ContainElement(corev1.EnvVar{Name: "NOCTAYA_SCALER_LISTEN_ADDR", Value: ":9090"}))
 
 			scalerService := &corev1.Service{}
 			scalerKey := types.NamespacedName{Name: svcName + "-scaler", Namespace: namespace}

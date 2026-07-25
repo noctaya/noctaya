@@ -2,10 +2,10 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   labels:
-    app.kubernetes.io/name: hearth
+    app.kubernetes.io/name: noctaya
     app.kubernetes.io/component: observability
     app.kubernetes.io/managed-by: kustomize
-  name: hearth-llmservices
+  name: noctaya-llmservices
 # namespaceSelector is intentionally omitted: install this object in each
 # LLMService namespace so discovery stays namespace-scoped.
 spec:
@@ -15,7 +15,7 @@ spec:
       port: http
   selector:
     matchLabels:
-      app.kubernetes.io/managed-by: hearth
+      app.kubernetes.io/managed-by: noctaya
     matchExpressions:
-      - key: serving.hearth.dev/llmservice
+      - key: serving.noctaya.io/llmservice
         operator: Exists

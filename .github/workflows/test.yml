@@ -39,9 +39,9 @@ jobs:
 
       - name: Validate Helm chart
         run: |
-          helm lint charts/hearth
-          helm template hearth charts/hearth --namespace hearth-system >/dev/null
-          helm template hearth charts/hearth --namespace hearth-system \
+          helm lint charts/noctaya
+          helm template noctaya charts/noctaya --namespace noctaya-system >/dev/null
+          helm template noctaya charts/noctaya --namespace noctaya-system \
             --set serviceAccount.create=false \
             --set operator.leaderElect=true >/dev/null
 

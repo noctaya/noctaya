@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,8 +32,8 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
-	"github.com/hearth-project/hearth/internal/gateway"
-	externalscaler "github.com/hearth-project/hearth/internal/gateway/externalscaler"
+	"github.com/noctaya/noctaya/internal/gateway"
+	externalscaler "github.com/noctaya/noctaya/internal/gateway/externalscaler"
 )
 
 const bufferSize = 1024 * 1024
@@ -55,7 +55,7 @@ func newScalerClient(t *testing.T, gw *gateway.Gateway) externalscaler.ExternalS
 	server := grpc.NewServer()
 	gateway.RegisterExternalScalerServer(server, gw)
 	go func() { _ = server.Serve(listener) }()
-	conn, err := grpc.NewClient("passthrough:///hearth-scaler",
+	conn, err := grpc.NewClient("passthrough:///noctaya-scaler",
 		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }),
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	NewWithT(t).Expect(err).NotTo(HaveOccurred())

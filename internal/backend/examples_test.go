@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,10 +25,10 @@ import (
 
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 
-	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
-	"github.com/hearth-project/hearth/internal/backend"
-	"github.com/hearth-project/hearth/internal/backend/registry"
-	modelresolver "github.com/hearth-project/hearth/internal/model"
+	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
+	"github.com/noctaya/noctaya/internal/backend"
+	"github.com/noctaya/noctaya/internal/backend/registry"
+	modelresolver "github.com/noctaya/noctaya/internal/model"
 )
 
 type exampleKustomization struct {
@@ -38,15 +38,15 @@ type exampleKustomization struct {
 var expectedNodeSelectors = map[string]map[string]string{
 	"ascend/310p-duo": {
 		"accelerator":                       "huawei-Ascend310P",
-		"serving.hearth.dev/ascend-product": "atlas-300i-duo",
+		"serving.noctaya.io/ascend-product": "atlas-300i-duo",
 	},
 	"ascend/310p-pro": {
 		"accelerator":                       "huawei-Ascend310P",
-		"serving.hearth.dev/ascend-product": "atlas-300i-pro",
+		"serving.noctaya.io/ascend-product": "atlas-300i-pro",
 	},
 	"ascend/910b3": {
 		"accelerator":                       "huawei-Ascend910",
-		"serving.hearth.dev/ascend-product": "ascend-910b3",
+		"serving.noctaya.io/ascend-product": "ascend-910b3",
 	},
 	"nvidia/a10": {
 		"nvidia.com/gpu.product": "NVIDIA-A10",

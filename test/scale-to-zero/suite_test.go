@@ -1,7 +1,7 @@
 //go:build e2e
 
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package scaletozero drives Hearth's complete no-accelerator lifecycle against
+// Package scaletozero drives Noctaya's complete no-accelerator lifecycle against
 // a disposable Kind cluster, real manager manifests, KEDA, and a CPU vLLM stub.
 package scaletozero
 
@@ -42,10 +42,10 @@ import (
 )
 
 const (
-	namespace         = "hearth-e2e"
-	managerNamespace  = "hearth-system"
-	managerDeployment = "hearth-controller-manager"
-	fakeResource      = "hearth.dev/fake-gpu"
+	namespace         = "noctaya-e2e"
+	managerNamespace  = "noctaya-system"
+	managerDeployment = "noctaya-controller-manager"
+	fakeResource      = "noctaya.io/fake-gpu"
 )
 
 var (
@@ -89,7 +89,7 @@ func manifestPath(name string) string {
 func applyManifest(name string) {
 	objects, err := os.ReadFile(manifestPath(name))
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-	objects = bytes.ReplaceAll(objects, []byte("hearth.dev/vllm-stub:e2e"), []byte(stubImage))
+	objects = bytes.ReplaceAll(objects, []byte("noctaya.io/vllm-stub:e2e"), []byte(stubImage))
 	applyYAML(objects)
 }
 
@@ -107,8 +107,8 @@ func applyManager() {
 	render.Dir = repoRoot
 	objects, err := render.Output()
 	Expect(err).NotTo(HaveOccurred())
-	objects = bytes.ReplaceAll(objects, []byte("hearth.dev/hearth:e2e"), []byte(managerImage))
-	objects = bytes.ReplaceAll(objects, []byte("hearth.dev/hearth-gateway:e2e"), []byte(gatewayImage))
+	objects = bytes.ReplaceAll(objects, []byte("noctaya.io/noctaya:e2e"), []byte(managerImage))
+	objects = bytes.ReplaceAll(objects, []byte("noctaya.io/noctaya-gateway:e2e"), []byte(gatewayImage))
 	applyYAML(objects)
 }
 
@@ -126,7 +126,7 @@ func backendReplicas(name string) (int, error) {
 
 func backendPods(name string) (int, error) {
 	output, err := kubectl("get", "pods", "-n", namespace,
-		"-l", "serving.hearth.dev/llmservice="+name, "-o", "name")
+		"-l", "serving.noctaya.io/llmservice="+name, "-o", "name")
 	if err != nil {
 		return 0, fmt.Errorf("get backend pods: %w: %s", err, output)
 	}
@@ -140,23 +140,23 @@ var _ = BeforeSuite(func() {
 	repoRoot, err = filepath.Abs(filepath.Join(filepath.Dir(file), "..", ".."))
 	Expect(err).NotTo(HaveOccurred())
 
-	scalerMode = os.Getenv("HEARTH_E2E_SCALER_MODE")
+	scalerMode = os.Getenv("NOCTAYA_E2E_SCALER_MODE")
 	Expect([]string{"metrics-api", "external-push"}).To(ContainElement(scalerMode))
 
-	expectedKind = os.Getenv("HEARTH_E2E_KIND_CLUSTER")
+	expectedKind = os.Getenv("NOCTAYA_E2E_KIND_CLUSTER")
 	Expect(expectedKind).NotTo(BeEmpty(), "run this suite through make test-e2e")
 	currentContext := strings.TrimSpace(mustKubectl("config", "current-context"))
 	Expect(currentContext).To(Equal("kind-"+expectedKind),
 		"refusing to mutate a cluster other than the disposable E2E Kind cluster")
 
-	kustomize = os.Getenv("HEARTH_E2E_KUSTOMIZE")
+	kustomize = os.Getenv("NOCTAYA_E2E_KUSTOMIZE")
 	Expect(kustomize).NotTo(BeEmpty(), "run this suite through make test-e2e")
 	if !filepath.IsAbs(kustomize) {
 		kustomize = filepath.Join(repoRoot, kustomize)
 	}
-	managerImage = os.Getenv("HEARTH_E2E_MANAGER_IMAGE")
-	gatewayImage = os.Getenv("HEARTH_E2E_GATEWAY_IMAGE")
-	stubImage = os.Getenv("HEARTH_E2E_STUB_IMAGE")
+	managerImage = os.Getenv("NOCTAYA_E2E_MANAGER_IMAGE")
+	gatewayImage = os.Getenv("NOCTAYA_E2E_GATEWAY_IMAGE")
+	stubImage = os.Getenv("NOCTAYA_E2E_STUB_IMAGE")
 	Expect(managerImage).NotTo(BeEmpty())
 	Expect(gatewayImage).NotTo(BeEmpty())
 	Expect(stubImage).NotTo(BeEmpty())
@@ -199,9 +199,9 @@ func dumpDiagnostics() {
 		{"Manager logs", []string{"logs", "deployment/" + managerDeployment, "-n", managerNamespace, "--tail=" + diagnosticLimit}},
 		{"E2E objects", []string{"get", "all,llmservices,scaledobjects", "-n", namespace, "-o", "wide"}},
 		{"E2E pod descriptions", []string{"describe", "pods", "-n", namespace}},
-		{"Gateway logs", []string{"logs", "-n", namespace, "-l", "serving.hearth.dev/gateway",
+		{"Gateway logs", []string{"logs", "-n", namespace, "-l", "serving.noctaya.io/gateway",
 			"--all-containers=true", "--prefix=true", "--tail=" + diagnosticLimit, "--max-log-requests=20"}},
-		{"Backend logs", []string{"logs", "-n", namespace, "-l", "serving.hearth.dev/llmservice",
+		{"Backend logs", []string{"logs", "-n", namespace, "-l", "serving.noctaya.io/llmservice",
 			"--all-containers=true", "--prefix=true", "--tail=" + diagnosticLimit, "--max-log-requests=20"}},
 		{"KEDA operator logs", []string{"logs", "deployment/keda-operator", "-n", "keda", "--tail=" + diagnosticLimit}},
 		{"E2E events", []string{"get", "events", "-n", namespace, "--sort-by=.lastTimestamp"}},

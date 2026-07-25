@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -177,7 +177,7 @@ type ScalingSpec struct {
 	// +optional
 	ScaleDownStabilization metav1.Duration `json:"scaleDownStabilization,omitempty"`
 
-	// drainTimeout is the pre-stop wait for in-flight requests. Hearth widens the
+	// drainTimeout is the pre-stop wait for in-flight requests. Noctaya widens the
 	// pod termination grace period when this timeout needs more room.
 	// +kubebuilder:default="2m"
 	// +optional

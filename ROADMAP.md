@@ -1,13 +1,13 @@
-# Hearth Roadmap
+# Noctaya Roadmap
 
 ## Project status
 
-Hearth `v0.3.0` is an **alpha** Kubernetes control plane for declarative, scale-to-zero LLM
+Noctaya `v0.3.0` is an **alpha** Kubernetes control plane for declarative, scale-to-zero LLM
 serving on private clusters. The core lifecycle works end to end on real NVIDIA and Ascend
 accelerators, and the hardware-independent path runs in CI. The API remains
-`serving.hearth.dev/v1alpha1`, so breaking changes are possible.
+`serving.noctaya.io/v1alpha1`, so breaking changes are possible.
 
-Hearth is useful today for internal, development, and staging workloads where accelerator cost
+Noctaya is useful today for internal, development, and staging workloads where accelerator cost
 matters, traffic can tolerate a cold start, and brief disruption is acceptable. It is not yet
 intended for shared multi-tenant clusters, public customer-facing endpoints, or workloads that
 require an availability or compatibility SLA.
@@ -65,8 +65,8 @@ See the [NVIDIA A10](docs/nvidia/a10-validation.md),
 
 ## v0.4.0 — internal production hardening
 
-The goal for v0.4.0 is to make Hearth safer and more predictable for **controlled, single-tenant
-internal production environments**. It will not by itself make Hearth a general-purpose,
+The goal for v0.4.0 is to make Noctaya safer and more predictable for **controlled, single-tenant
+internal production environments**. It will not by itself make Noctaya a general-purpose,
 multi-tenant serving platform.
 
 ### Secure access and deployment boundaries
@@ -132,13 +132,13 @@ requirement justifies their operational cost.
 Potential demand-driven work includes KV-cache or latency-aware scaling, canary and blue-green
 rollouts, LoRA lifecycle support, air-gapped model bundles, rate limiting, audit integration, and
 tenant-aware policy. These features should be driven by real deployments rather than added to make
-Hearth resemble a larger platform.
+Noctaya resemble a larger platform.
 
 ### Remain a composable control plane
 
-Hearth will continue to own the Kubernetes model lifecycle and the small-cluster scale-to-zero
+Noctaya will continue to own the Kubernetes model lifecycle and the small-cluster scale-to-zero
 path. Fleet routing, prefill/decode disaggregation, datacenter scheduling, inference kernels,
-device plugins, and schedulers remain outside its boundary. Hearth should integrate with projects
+device plugins, and schedulers remain outside its boundary. Noctaya should integrate with projects
 such as KEDA, Volcano, HAMi, and Kthena instead of duplicating them.
 
 ### Grow through users and contributors

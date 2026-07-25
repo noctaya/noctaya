@@ -1,8 +1,8 @@
-apiVersion: serving.hearth.dev/v1alpha1
+apiVersion: serving.noctaya.io/v1alpha1
 kind: InferenceRuntime
 metadata:
   labels:
-    app.kubernetes.io/name: hearth
+    app.kubernetes.io/name: noctaya
     app.kubernetes.io/managed-by: kustomize
   name: vllm-ascend-310p-duo
 # Hardware-verified on an Atlas 300I Duo with two Ascend 310P3 devices.
@@ -28,7 +28,7 @@ spec:
       supported: false
     nodeSelector:
       accelerator: huawei-Ascend310P
-      serving.hearth.dev/ascend-product: atlas-300i-duo
+      serving.noctaya.io/ascend-product: atlas-300i-duo
   health:
     readiness:
       httpGet:

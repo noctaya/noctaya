@@ -39,7 +39,7 @@ The complete operator, device-plugin, gateway, KEDA, and vLLM path passed on thi
 | Ascend Device Plugin | MindCluster `v7.3.0` |
 | KEDA | `2.20.1` |
 | vLLM-Ascend image | `v0.22.1rc1-310p` |
-| Hearth images | Operator `0.2.0-rc.1` ; gateway `0.2.0-rc.1` |
+| Noctaya images | Operator `0.2.0-rc.1` ; gateway `0.2.0-rc.1` |
 | Model / cache | `Qwen/Qwen2.5-0.5B-Instruct`; NodeLocalPVC on a dedicated 120 GB ext4 data disk |
 
 Observed functional results:
@@ -52,7 +52,7 @@ Observed functional results:
 - Reject mode returned `503` with `Retry-After`; a saturated 100-request queue rejected the next
   five requests with `429`.
 - A 256-token stream completed with `[DONE]` after its serving Pods were deleted, validating drain.
-- Cache data, the driver, device capacity, Hearth, KEDA, and the device plugin recovered across two
+- Cache data, the driver, device capacity, Noctaya, KEDA, and the device plugin recovered across two
   full host reboots. A no-op apply, operator restart, gateway deletion, and Helm upgrade also
   preserved the expected resources.
 
@@ -101,32 +101,32 @@ kubectl get nodes \
 ```
 
 Each target node must report a non-zero value. If not, correct the driver/device-plugin installation
-before installing Hearth workloads. Mixed insertion is outside this profile because it reports
+before installing Noctaya workloads. Mixed insertion is outside this profile because it reports
 product-specific resources such as `huawei.com/Ascend310P-IPro`.
 
 ## 3. Label each product node
 
-Huawei's standard label identifies the 310P family but does not distinguish Duo from Pro. The Hearth
+Huawei's standard label identifies the 310P family but does not distinguish Duo from Pro. The Noctaya
 label makes each validation result attributable to the intended card.
 
 ```bash
 # Atlas 300I Duo
 kubectl label node <duo-node> accelerator=huawei-Ascend310P --overwrite
-kubectl label node <duo-node> serving.hearth.dev/ascend-product=atlas-300i-duo --overwrite
+kubectl label node <duo-node> serving.noctaya.io/ascend-product=atlas-300i-duo --overwrite
 
 # Atlas 300I Pro
 kubectl label node <pro-node> accelerator=huawei-Ascend310P --overwrite
-kubectl label node <pro-node> serving.hearth.dev/ascend-product=atlas-300i-pro --overwrite
+kubectl label node <pro-node> serving.noctaya.io/ascend-product=atlas-300i-pro --overwrite
 
-kubectl get nodes -L accelerator,serving.hearth.dev/ascend-product
+kubectl get nodes -L accelerator,serving.noctaya.io/ascend-product
 ```
 
-## 4. Prepare Hearth
+## 4. Prepare Noctaya
 
 Use a dedicated cluster and namespace. Confirm the kube-context before changing cluster state.
 ```bash
 kubectl config current-context
-kubectl create namespace hearth-310p-validation
+kubectl create namespace noctaya-310p-validation
 make install
 ```
 
@@ -136,7 +136,7 @@ For K3s, configure a separate data disk through `/etc/rancher/k3s/config.yaml`; 
 local-path manifest or ConfigMap is not persistent because K3s regenerates it:
 
 ```yaml
-default-local-storage-path: /var/lib/hearth-data/local-path
+default-local-storage-path: /var/lib/noctaya-data/local-path
 ```
 
 Restart K3s, then verify both the live `local-path-config` ConfigMap and a test PVC before deploying
@@ -155,28 +155,28 @@ case "$PROFILE" in
 esac
 SERVICE="qwen-310p-${PROFILE}-validation"
 
-kubectl apply -k "examples/ascend/${PROFILE_DIR}" -n hearth-310p-validation
-kubectl get llmservice,pvc,job,deploy,pod -n hearth-310p-validation -w
+kubectl apply -k "examples/ascend/${PROFILE_DIR}" -n noctaya-310p-validation
+kubectl get llmservice,pvc,job,deploy,pod -n noctaya-310p-validation -w
 ```
 
 Confirm that the Pod landed on the intended node and requested one 310P:
 
 ```bash
-kubectl get pod -n hearth-310p-validation \
-  -l "serving.hearth.dev/llmservice=$SERVICE" \
+kubectl get pod -n noctaya-310p-validation \
+  -l "serving.noctaya.io/llmservice=$SERVICE" \
   -o custom-columns='NAME:.metadata.name,NODE:.spec.nodeName,NPU:.spec.containers[0].resources.limits.huawei\.com/Ascend310P'
 ```
 
 ## 6. Exercise inference and scale-to-zero
 
 ```bash
-kubectl get deploy "$SERVICE" -n hearth-310p-validation -w
+kubectl get deploy "$SERVICE" -n noctaya-310p-validation -w
 ```
 
 Wait for KEDA to hold the backend at zero while the gateway remains available. In another terminal:
 
 ```bash
-kubectl port-forward -n hearth-310p-validation "svc/$SERVICE" 8080:80
+kubectl port-forward -n noctaya-310p-validation "svc/$SERVICE" 8080:80
 ```
 
 Send a streaming request. The gateway may emit heartbeat comments while the model loads:
@@ -184,7 +184,7 @@ Send a streaming request. The gateway may emit heartbeat comments while the mode
 ```bash
 curl -N http://127.0.0.1:8080/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -d "{\"model\":\"$SERVICE\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with: Hearth 310P validation passed\"}]}"
+  -d "{\"model\":\"$SERVICE\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with: Noctaya 310P validation passed\"}]}"
 ```
 
 Record idle replicas at zero, the cold request causing `0 -> 1`, Loading-to-Ready status, a complete
@@ -198,8 +198,8 @@ device topology is recorded.
 ### Backend remains Pending
 
 ```bash
-kubectl describe pod -n hearth-310p-validation <backend-pod>
-kubectl get nodes -L accelerator,serving.hearth.dev/ascend-product
+kubectl describe pod -n noctaya-310p-validation <backend-pod>
+kubectl get nodes -L accelerator,serving.noctaya.io/ascend-product
 kubectl describe node <target-node> | grep -A5 -B5 Ascend310P
 ```
 
@@ -208,8 +208,8 @@ Check the device resource, product label, taints, and cache PVC binding.
 ### Prewarm fails
 
 ```bash
-kubectl logs -n hearth-310p-validation job/<service-name>-prewarm
-kubectl describe pvc -n hearth-310p-validation <service-name>-cache
+kubectl logs -n noctaya-310p-validation job/<service-name>-prewarm
+kubectl describe pvc -n noctaya-310p-validation <service-name>-cache
 ```
 
 Check ModelScope egress, DNS, proxy settings, StorageClass availability, and disk capacity.
@@ -217,9 +217,9 @@ Check ModelScope egress, DNS, proxy settings, StorageClass availability, and dis
 ### Backend never becomes Ready
 
 ```bash
-kubectl logs -n hearth-310p-validation deploy/<service-name> --all-containers
-kubectl describe pod -n hearth-310p-validation \
-  -l serving.hearth.dev/llmservice=<service-name>
+kubectl logs -n noctaya-310p-validation deploy/<service-name> --all-containers
+kubectl describe pod -n noctaya-310p-validation \
+  -l serving.noctaya.io/llmservice=<service-name>
 ```
 
 Check image/driver/CANN compatibility, driver projections, and device assignment first.

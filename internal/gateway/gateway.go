@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package gateway is the Hearth data plane: an OpenAI-compatible reverse proxy that
+// Package gateway is the Noctaya data plane: an OpenAI-compatible reverse proxy that
 // sits in front of one LLMService. It buffers requests while the backend is cold,
 // applies bounded-queue backpressure, and exposes the pending-request count as the
 // demand signal the scaler turns into a KEDA scale-from-zero decision.
@@ -40,16 +40,16 @@ import (
 
 // Environment variables read by ConfigFromEnv (and set by the operator-rendered Deployment).
 const (
-	EnvBackendURL        = "HEARTH_BACKEND_URL"
-	EnvMaxQueue          = "HEARTH_MAX_QUEUE"
-	EnvActivationTimeout = "HEARTH_ACTIVATION_TIMEOUT"
-	EnvListenAddr        = "HEARTH_LISTEN_ADDR"
-	EnvScalerListenAddr  = "HEARTH_SCALER_LISTEN_ADDR"
-	EnvColdStartMode     = "HEARTH_COLDSTART_MODE"
-	EnvHeartbeatInterval = "HEARTH_HEARTBEAT_INTERVAL"
+	EnvBackendURL        = "NOCTAYA_BACKEND_URL"
+	EnvMaxQueue          = "NOCTAYA_MAX_QUEUE"
+	EnvActivationTimeout = "NOCTAYA_ACTIVATION_TIMEOUT"
+	EnvListenAddr        = "NOCTAYA_LISTEN_ADDR"
+	EnvScalerListenAddr  = "NOCTAYA_SCALER_LISTEN_ADDR"
+	EnvColdStartMode     = "NOCTAYA_COLDSTART_MODE"
+	EnvHeartbeatInterval = "NOCTAYA_HEARTBEAT_INTERVAL"
 
 	DefaultListenAddr = ":8080"
-	QueuePath         = "/hearth/queue"
+	QueuePath         = "/noctaya/queue"
 	MetricsPath       = "/metrics"
 
 	// ColdStartKeepalive holds a streaming request open with SSE heartbeats during a
@@ -106,20 +106,20 @@ func newMetrics() *metrics {
 	m := &metrics{
 		registry: prometheus.NewRegistry(),
 		pending: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "hearth_gateway_pending", Help: "Requests admitted and waiting or in flight."}),
+			Name: "noctaya_gateway_pending", Help: "Requests admitted and waiting or in flight."}),
 		demand: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "hearth_gateway_demand", Help: "Effective queue demand reported to KEDA, including an activation lease floor."}),
+			Name: "noctaya_gateway_demand", Help: "Effective queue demand reported to KEDA, including an activation lease floor."}),
 		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "hearth_gateway_requests_total", Help: "Responses by HTTP status code."}, []string{"code"}),
+			Name: "noctaya_gateway_requests_total", Help: "Responses by HTTP status code."}, []string{"code"}),
 		rejections: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "hearth_gateway_rejections_total", Help: "Rejected requests by reason."}, []string{"reason"}),
+			Name: "noctaya_gateway_rejections_total", Help: "Rejected requests by reason."}, []string{"reason"}),
 		coldStart: prometheus.NewHistogram(prometheus.HistogramOpts{
-			Name: "hearth_gateway_activation_wait_seconds", Help: "Time spent holding a request until the backend was ready.",
+			Name: "noctaya_gateway_activation_wait_seconds", Help: "Time spent holding a request until the backend was ready.",
 			Buckets: []float64{0.01, 0.1, 1, 5, 15, 30, 60, 120, 300}}),
 		scalerStreams: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "hearth_gateway_scaler_streams", Help: "Connected KEDA external-push activation streams."}),
+			Name: "noctaya_gateway_scaler_streams", Help: "Connected KEDA external-push activation streams."}),
 		activationEvents: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "hearth_gateway_activation_events_total", Help: "Inactive-to-active effective demand transitions."}),
+			Name: "noctaya_gateway_activation_events_total", Help: "Inactive-to-active effective demand transitions."}),
 	}
 	m.registry.MustRegister(m.pending, m.demand, m.requests, m.rejections, m.coldStart, m.scalerStreams, m.activationEvents)
 	return m

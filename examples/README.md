@@ -8,7 +8,7 @@ cluster. The root `examples/kustomization.yaml` is intentionally empty so that
 `kubectl apply -k examples` cannot deploy incompatible workloads across multiple accelerator
 families.
 
-Install Hearth, KEDA, and the device plugin for the selected accelerator before applying a
+Install Noctaya, KEDA, and the device plugin for the selected accelerator before applying a
 profile. For example:
 
 ```bash
@@ -26,15 +26,15 @@ Every runtime profile selects its intended accelerator nodes:
 |---|---|---|
 | NVIDIA A10 | `nvidia.com/gpu` | `nvidia.com/gpu.product=NVIDIA-A10` |
 | NVIDIA A100 | `nvidia.com/gpu` | `nvidia.com/gpu.product=NVIDIA-A100` |
-| Atlas 300I Duo | `huawei.com/Ascend310P` | `accelerator=huawei-Ascend310P`, `serving.hearth.dev/ascend-product=atlas-300i-duo` |
-| Atlas 300I Pro | `huawei.com/Ascend310P` | `accelerator=huawei-Ascend310P`, `serving.hearth.dev/ascend-product=atlas-300i-pro` |
-| Ascend 910B3 | `huawei.com/Ascend910` | `accelerator=huawei-Ascend910`, `serving.hearth.dev/ascend-product=ascend-910b3` |
+| Atlas 300I Duo | `huawei.com/Ascend310P` | `accelerator=huawei-Ascend310P`, `serving.noctaya.io/ascend-product=atlas-300i-duo` |
+| Atlas 300I Pro | `huawei.com/Ascend310P` | `accelerator=huawei-Ascend310P`, `serving.noctaya.io/ascend-product=atlas-300i-pro` |
+| Ascend 910B3 | `huawei.com/Ascend910` | `accelerator=huawei-Ascend910`, `serving.noctaya.io/ascend-product=ascend-910b3` |
 
 Inspect the live node labels before applying a profile:
 
 ```bash
 kubectl get nodes \
-  -L nvidia.com/gpu.product,accelerator,serving.hearth.dev/ascend-product
+  -L nvidia.com/gpu.product,accelerator,serving.noctaya.io/ascend-product
 ```
 
 ## Change the model
@@ -81,6 +81,6 @@ kubectl apply -n ai -f examples/nvidia/a10/serving_v1alpha1_llmservice.yaml
 
 ## Optional observability
 
-Hearth exposes metrics but does not create Prometheus or Grafana resources. The independent
-[`observability`](https://github.com/hearth-project/hearth/tree/main/examples/observability)
+Noctaya exposes metrics but does not create Prometheus or Grafana resources. The independent
+[`observability`](https://github.com/noctaya/noctaya/tree/main/examples/observability)
 package contains an opt-in `ServiceMonitor` and dashboard.

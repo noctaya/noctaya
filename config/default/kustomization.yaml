@@ -1,6 +1,6 @@
-namespace: hearth-system
+namespace: noctaya-system
 
-namePrefix: hearth-
+namePrefix: noctaya-
 
 resources:
 - ../crd

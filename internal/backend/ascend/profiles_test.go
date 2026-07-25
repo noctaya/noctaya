@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,10 +26,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 
-	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
-	"github.com/hearth-project/hearth/internal/backend"
-	"github.com/hearth-project/hearth/internal/backend/ascend"
-	"github.com/hearth-project/hearth/internal/model"
+	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
+	"github.com/noctaya/noctaya/internal/backend"
+	"github.com/noctaya/noctaya/internal/backend/ascend"
+	"github.com/noctaya/noctaya/internal/model"
 )
 
 const examplesDir = "../../../examples/ascend"
@@ -63,7 +63,7 @@ func TestAscend910B3Profile(t *testing.T) {
 	g.Expect(rt.Spec.Container.Args[:3]).To(Equal([]string{"vllm", "serve", "{{ .Model.Path }}"}))
 	g.Expect(rt.Spec.Accelerator.ResourceName).To(Equal("huawei.com/Ascend910"))
 	g.Expect(rt.Spec.Accelerator.NodeSelector).To(HaveKeyWithValue("accelerator", "huawei-Ascend910"))
-	g.Expect(rt.Spec.Accelerator.NodeSelector).To(HaveKeyWithValue("serving.hearth.dev/ascend-product", "ascend-910b3"))
+	g.Expect(rt.Spec.Accelerator.NodeSelector).To(HaveKeyWithValue("serving.noctaya.io/ascend-product", "ascend-910b3"))
 	g.Expect(svc.Spec.Runtime.Name).To(Equal(rt.Name))
 	g.Expect(svc.Spec.Scaling.Max).To(Equal(int32(1)))
 	g.Expect(svc.Spec.Scaling.DrainTimeout.Duration.String()).To(Equal("1m0s"))
@@ -126,7 +126,7 @@ func TestAscend310PProfiles(t *testing.T) {
 			g.Expect(rt.Spec.Container.Image).To(Equal("quay.io/ascend/vllm-ascend:v0.22.1rc1-310p"))
 			g.Expect(rt.Spec.Accelerator.ResourceName).To(Equal("huawei.com/Ascend310P"))
 			g.Expect(rt.Spec.Accelerator.NodeSelector).To(HaveKeyWithValue("accelerator", "huawei-Ascend310P"))
-			g.Expect(rt.Spec.Accelerator.NodeSelector).To(HaveKeyWithValue("serving.hearth.dev/ascend-product", profile.product))
+			g.Expect(rt.Spec.Accelerator.NodeSelector).To(HaveKeyWithValue("serving.noctaya.io/ascend-product", profile.product))
 			g.Expect(rt.Spec.Container.Args[:3]).To(Equal([]string{"vllm", "serve", "{{ .Model.Path }}"}))
 			g.Expect(svc.Spec.Runtime.Name).To(Equal(profile.runtimeName))
 			g.Expect(svc.Spec.Runtime.ArgsOverride).To(ContainElements("--dtype=float16", "--enforce-eager", "--max-model-len=2048"))

@@ -1,8 +1,8 @@
-apiVersion: serving.hearth.dev/v1alpha1
+apiVersion: serving.noctaya.io/v1alpha1
 kind: InferenceRuntime
 metadata:
   labels:
-    app.kubernetes.io/name: hearth
+    app.kubernetes.io/name: noctaya
     app.kubernetes.io/managed-by: kustomize
   name: vllm-ascend
 # Ascend 910B3 (Atlas A2). This profile is hardware-validated with CANN 9.0.0
@@ -30,7 +30,7 @@ spec:
     nodeSelector:
       # Matches the selector in MindCluster's standard Ascend 910 device-plugin manifest.
       accelerator: huawei-Ascend910
-      serving.hearth.dev/ascend-product: ascend-910b3
+      serving.noctaya.io/ascend-product: ascend-910b3
   health:
     readiness:
       httpGet:

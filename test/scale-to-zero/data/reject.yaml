@@ -1,4 +1,4 @@
-apiVersion: serving.hearth.dev/v1alpha1
+apiVersion: serving.noctaya.io/v1alpha1
 kind: InferenceRuntime
 metadata:
   name: vllm-stub-unsched
@@ -7,7 +7,7 @@ spec:
   vendor: nvidia
   priority: 100
   container:
-    image: hearth.dev/vllm-stub:e2e
+    image: noctaya.io/vllm-stub:e2e
     args: ["--model={{ .Model.Path }}"]
     port:
       name: http
@@ -15,22 +15,22 @@ spec:
   accelerator:
     # A resource the node does not advertise → the backend pod never schedules,
     # so the gateway stays cold and (in reject mode) fast-503s.
-    resourceName: hearth.dev/missing-gpu
+    resourceName: noctaya.io/missing-gpu
     sharing:
       supported: false
   health:
     readiness:
       httpGet: { path: /health, port: http }
 ---
-apiVersion: serving.hearth.dev/v1alpha1
+apiVersion: serving.noctaya.io/v1alpha1
 kind: LLMService
 metadata:
   name: stub-503
-  namespace: hearth-e2e
+  namespace: noctaya-e2e
 spec:
   model:
     source:
-      uri: hf://hearth/stub-model
+      uri: hf://noctaya/stub-model
   runtime:
     name: vllm-stub-unsched
   resources:

@@ -1,8 +1,8 @@
 # CRD reference
 
-Hearth CRDs use API group `serving.hearth.dev/v1alpha1`. This page documents the user-facing fields
+Noctaya CRDs use API group `serving.noctaya.io/v1alpha1`. This page documents the user-facing fields
 from
-[`api/v1alpha1/`](https://github.com/hearth-project/hearth/tree/main/api/v1alpha1)
+[`api/v1alpha1/`](https://github.com/noctaya/noctaya/tree/main/api/v1alpha1)
 and the generated CRD schemas. The API remains alpha: fields reserved for planned features may be
 accepted by Kubernetes but rejected during reconciliation. Those fields are marked below; schema
 presence alone is not a support claim.
@@ -40,14 +40,14 @@ models and an omitted runtime are admitted by the alpha schema but reported as `
 | `spec.resources.fraction.cores` | integer | - | Core count for a fractional accelerator request. |
 | `spec.resources.cpu` | quantity | - | CPU request for the serving workload. |
 | `spec.resources.memory` | quantity | - | Equal memory request and limit for each backend replica. |
-| `spec.scaling` | object | - | KEDA-driven autoscaling configuration. Hearth supports LLM-aware signals rather than CPU or raw RPS. |
+| `spec.scaling` | object | - | KEDA-driven autoscaling configuration. Noctaya supports LLM-aware signals rather than CPU or raw RPS. |
 | `spec.scaling.min` | integer | `0`, minimum `0` | Minimum backend replicas. `0` enables scale-to-zero. |
 | `spec.scaling.max` | integer | `1`, minimum `1` | Maximum backend replicas. |
 | `spec.scaling.metric` | string | default `queueDepth`; enum `queueDepth`, `kvCacheUtil` | `queueDepth` drives scaling. `kvCacheUtil` is reserved and rejected during reconciliation. |
 | `spec.scaling.target` | integer | `10`, minimum `1` | Desired metric value per replica. |
 | `spec.scaling.activationTimeout` | duration string | `5m` | Cold-activation deadline. In `keepalive` mode it bounds how long a request waits for readiness; in `reject` mode it bounds the demand lease retained after the immediate `503`. |
 | `spec.scaling.scaleDownStabilization` | duration string | `5m` | HPA stabilization window for scale-down and KEDA cooldown before the final transition to zero. Use whole seconds from `0s` through the HPA limit of `1h`. |
-| `spec.scaling.drainTimeout` | duration string | `2m` | Pre-stop wait for in-flight requests when the selected runtime sets `spec.lifecycle.preStopDrain: true`. Hearth widens the Pod termination grace period to this timeout plus a shutdown margin when needed. |
+| `spec.scaling.drainTimeout` | duration string | `2m` | Pre-stop wait for in-flight requests when the selected runtime sets `spec.lifecycle.preStopDrain: true`. Noctaya widens the Pod termination grace period to this timeout plus a shutdown margin when needed. |
 | `spec.cache` | object | - | Model-weight cache configuration for reducing cold-start downloads. |
 | `spec.cache.strategy` | string | default `NodeLocalPVC`; enum `NodeLocalPVC`, `HostPath`, `SharedPVC`, `BakedImage`, `None` | Cache backend. `NodeLocalPVC`, `HostPath`, and `None` are implemented. `SharedPVC` and `BakedImage` are reserved and rejected during reconciliation. |
 | `spec.cache.size` | quantity | `50Gi` (controller default) | Requested cache PVC size for `NodeLocalPVC`. |
@@ -76,7 +76,7 @@ the Job to rerun prewarming; replace a PVC only after preserving any data you ne
 | `status.resolvedRuntime` | Name of the `InferenceRuntime` selected by the controller. |
 | `status.replicas` | Number of ready backend replicas. Gateway replicas are not included. |
 | `status.endpointURL` | In-cluster OpenAI-compatible base URL, ending in `/v1`. |
-| `status.conditions` | Kubernetes conditions. Hearth maintains a `Ready` condition with `ObservedGeneration` set to the reconciled generation. |
+| `status.conditions` | Kubernetes conditions. Noctaya maintains a `Ready` condition with `ObservedGeneration` set to the reconciled generation. |
 
 ## InferenceRuntime
 
@@ -109,9 +109,9 @@ controller is passive. Changing a runtime requeues services that pin it or selec
 | `spec.health.liveness` | Kubernetes `Probe` | none | Detects a failed process after startup. |
 | `spec.health.startup` | Kubernetes `Probe` | controller default: HTTP `GET /health`, about 10 minutes | Protects slow model loading from liveness restarts. |
 | `spec.lifecycle` | object | - | Graceful serving-Pod termination settings. |
-| `spec.lifecycle.terminationGracePeriodSeconds` | integer | Kubernetes default; minimum `1` when set | Base Pod shutdown budget. Hearth widens it to cover `drainTimeout` plus 10 seconds when draining is enabled. |
+| `spec.lifecycle.terminationGracePeriodSeconds` | integer | Kubernetes default; minimum `1` when set | Base Pod shutdown budget. Noctaya widens it to cover `drainTimeout` plus 10 seconds when draining is enabled. |
 | `spec.lifecycle.preStopDrain` | boolean | `false` | Adds a pre-stop wait for `LLMService.spec.scaling.drainTimeout`. The serving image must contain `/bin/sh`. |
-| `spec.metrics` | object | - | Runtime metric metadata for external integrations. Hearth autoscaling uses gateway demand and does not consume these names. |
+| `spec.metrics` | object | - | Runtime metric metadata for external integrations. Noctaya autoscaling uses gateway demand and does not consume these names. |
 | `spec.metrics.path` | string | `/metrics` | Runtime Prometheus scrape path. |
 | `spec.metrics.port` | string | `http` | Service port that exposes runtime metrics. |
 | `spec.metrics.queueDepth` | string | required when `metrics` is set | Runtime pending-request metric name. |

@@ -1,4 +1,4 @@
-IMG ?= ghcr.io/hearth-project/hearth:latest
+IMG ?= ghcr.io/noctaya/noctaya:latest
 YEAR ?= $(shell date +%Y)
 # VERSION is injected into manager and gateway binaries. Tagged builds use the
 # nearest git tag, while local builds fall back to dev outside a git checkout.
@@ -49,20 +49,20 @@ vet: ## Run go vet against code.
 test: manifests generate fmt vet setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
-DOCS_DIR ?= docs/hearth
+DOCS_DIR ?= docs/noctaya
 
 .PHONY: test-docs
 test-docs: ## Install pinned documentation dependencies and build the Docusaurus site.
 	npm --prefix "$(DOCS_DIR)" ci
 	npm --prefix "$(DOCS_DIR)" run build
 
-E2E_KIND_CLUSTER ?= hearth-test-e2e
-E2E_KUBECONFIG ?= $(abspath $(LOCALBIN)/hearth-test-e2e.kubeconfig)
+E2E_KIND_CLUSTER ?= noctaya-test-e2e
+E2E_KUBECONFIG ?= $(abspath $(LOCALBIN)/noctaya-test-e2e.kubeconfig)
 E2E_SCALER_MODE ?= metrics-api
 E2E_KEDA_VERSION ?= 2.20.1
-E2E_MANAGER_IMG ?= hearth.dev/hearth:e2e
-E2E_GATEWAY_IMG ?= hearth.dev/hearth-gateway:e2e
-E2E_STUB_IMG ?= hearth.dev/vllm-stub:e2e
+E2E_MANAGER_IMG ?= noctaya.io/noctaya:e2e
+E2E_GATEWAY_IMG ?= noctaya.io/noctaya-gateway:e2e
+E2E_STUB_IMG ?= noctaya.io/vllm-stub:e2e
 E2E_ARCHIVE_DIR ?= $(abspath $(LOCALBIN)/e2e-images)
 
 .PHONY: load-e2e-images
@@ -127,7 +127,7 @@ docker-build: ## Build docker image with the manager.
 docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
 
-GATEWAY_IMG ?= ghcr.io/hearth-project/hearth-gateway:latest
+GATEWAY_IMG ?= ghcr.io/noctaya/noctaya-gateway:latest
 
 .PHONY: docker-build-gateway
 docker-build-gateway: ## Build the data-plane gateway image.
@@ -137,7 +137,7 @@ docker-build-gateway: ## Build the data-plane gateway image.
 docker-push-gateway: ## Push the data-plane gateway image.
 	$(CONTAINER_TOOL) push ${GATEWAY_IMG}
 
-STUB_IMG ?= hearth.dev/vllm-stub:e2e
+STUB_IMG ?= noctaya.io/vllm-stub:e2e
 
 .PHONY: docker-build-stub
 docker-build-stub: ## Build the CPU vllm-stub image used by the no-GPU e2e harness.
@@ -145,16 +145,16 @@ docker-build-stub: ## Build the CPU vllm-stub image used by the no-GPU e2e harne
 
 .PHONY: helm-crds
 helm-crds: manifests ## Sync generated CRDs into the Helm chart's crds/ directory.
-	cp config/crd/bases/*.yaml charts/hearth/crds/
+	cp config/crd/bases/*.yaml charts/noctaya/crds/
 
 # docker-buildx builds and pushes every listed platform.
 PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
 .PHONY: docker-buildx
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
-	- $(CONTAINER_TOOL) buildx create --name hearth-builder
-	$(CONTAINER_TOOL) buildx use hearth-builder
+	- $(CONTAINER_TOOL) buildx create --name noctaya-builder
+	$(CONTAINER_TOOL) buildx use noctaya-builder
 	$(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --build-arg VERSION=$(VERSION) --tag ${IMG} .
-	- $(CONTAINER_TOOL) buildx rm hearth-builder
+	- $(CONTAINER_TOOL) buildx rm noctaya-builder
 
 .PHONY: build-installer
 build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.

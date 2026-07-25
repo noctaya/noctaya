@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
-	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
+	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
 )
 
 const (
@@ -115,7 +115,7 @@ func metricsAPITrigger(svc *servingv1alpha1.LLMService, target int32) map[string
 	return map[string]any{
 		"type": string(ScalerModeMetricsAPI),
 		"metadata": map[string]any{
-			"url":                   fmt.Sprintf("http://%s.%s.svc/hearth/queue", GatewayServiceName(svc), svc.Namespace),
+			"url":                   fmt.Sprintf("http://%s.%s.svc/noctaya/queue", GatewayServiceName(svc), svc.Namespace),
 			"valueLocation":         "pending",
 			"targetValue":           strconv.Itoa(int(target)),
 			"activationTargetValue": "0", // any pending request wakes from zero

@@ -1,5 +1,5 @@
 apiVersion: v2
-name: hearth
+name: noctaya
 description: A minimal, composable LLM serving control plane for private Kubernetes clusters.
 type: application
 version: 0.3.0
@@ -11,8 +11,8 @@ keywords:
   - operator
   - scale-to-zero
   - ascend
-home: https://github.com/hearth-project/hearth
+home: https://github.com/noctaya/noctaya
 sources:
-  - https://github.com/hearth-project/hearth
+  - https://github.com/noctaya/noctaya
 maintainers:
-  - name: The Hearth Authors
+  - name: The Noctaya Authors

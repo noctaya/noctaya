@@ -1,10 +1,10 @@
-apiVersion: serving.hearth.dev/v1alpha1
+apiVersion: serving.noctaya.io/v1alpha1
 kind: InferenceRuntime
 # The A100 lifecycle was validated with vLLM v0.22.0. This upgraded runtime
 # requires focused A100 revalidation before its exact stack is claimed as verified.
 metadata:
   labels:
-    app.kubernetes.io/name: hearth
+    app.kubernetes.io/name: noctaya
     app.kubernetes.io/managed-by: kustomize
   name: vllm-nvidia-a100
 spec:

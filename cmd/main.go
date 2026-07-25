@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -34,9 +34,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
-	"github.com/hearth-project/hearth/internal/backend"
-	"github.com/hearth-project/hearth/internal/controller"
+	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
+	"github.com/noctaya/noctaya/internal/backend"
+	"github.com/noctaya/noctaya/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -81,7 +81,7 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics server")
-	flag.StringVar(&gatewayImage, "gateway-image", "ghcr.io/hearth-project/hearth-gateway:latest",
+	flag.StringVar(&gatewayImage, "gateway-image", "ghcr.io/noctaya/noctaya-gateway:latest",
 		"Container image for the per-LLMService data-plane gateway.")
 	flag.IntVar(&gatewayReplicas, "gateway-replicas", 1,
 		"Replicas for each LLMService's data-plane gateway. external-push requires exactly 1.")
@@ -145,7 +145,7 @@ func main() {
 		Metrics:                metricsServerOptions,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "6d7012cb.hearth.dev",
+		LeaderElectionID:       "6d7012cb.noctaya.io",
 	})
 	if err != nil {
 		setupLog.Error(err, "Failed to start manager")

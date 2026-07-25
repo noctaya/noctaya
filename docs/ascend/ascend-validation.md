@@ -1,6 +1,6 @@
 # Ascend hardware validation
 
-This page is the entry point for validating Hearth on real Ascend servers. Product-specific
+This page is the entry point for validating Noctaya on real Ascend servers. Product-specific
 commands live in the [910B report](ascend-910b-validation.md) and the
 [310P runbook](ascend-310p-validation.md).
 
@@ -10,15 +10,15 @@ commands live in the [910B report](ascend-910b-validation.md) and the
 |---|---|---|
 | vLLM image | `quay.io/ascend/vllm-ascend:v0.21.0rc1` | `quay.io/ascend/vllm-ascend:v0.22.1rc1-310p` |
 | Device resource | `huawei.com/Ascend910` | `huawei.com/Ascend310P` |
-| Node label | `accelerator=huawei-Ascend910` plus the Hearth product label | `accelerator=huawei-Ascend310P` plus the Hearth product label |
+| Node label | `accelerator=huawei-Ascend910` plus the Noctaya product label | `accelerator=huawei-Ascend310P` plus the Noctaya product label |
 | Smoke model | `Qwen/Qwen2.5-0.5B-Instruct` | `Qwen/Qwen2.5-0.5B-Instruct` |
-| Hearth operator | `ghcr.io/hearth-project/hearth:<release>` | `ghcr.io/hearth-project/hearth:<release>` |
-| Hearth gateway | `ghcr.io/hearth-project/hearth-gateway:<release>` | `ghcr.io/hearth-project/hearth-gateway:<release>` |
+| Noctaya operator | `ghcr.io/noctaya/noctaya:<release>` | `ghcr.io/noctaya/noctaya:<release>` |
+| Noctaya gateway | `ghcr.io/noctaya/noctaya-gateway:<release>` | `ghcr.io/noctaya/noctaya-gateway:<release>` |
 | Cluster services | Ascend Device Plugin and KEDA images compatible with the cluster | Ascend Device Plugin and KEDA images compatible with the cluster |
 
-Use the same release tag for both Hearth images. The prewarm Job reuses the vLLM image, and the
+Use the same release tag for both Noctaya images. The prewarm Job reuses the vLLM image, and the
 smoke model is downloaded into that container rather than packaged as an image.
-`kube-prometheus-stack` is optional unless metrics collection is part of the validation. Hearth
+`kube-prometheus-stack` is optional unless metrics collection is part of the validation. Noctaya
 does not pin the device-plugin or KEDA images because their compatible versions depend on the host
 and cluster; record the exact images and digests used by the validation environment.
 
@@ -42,9 +42,9 @@ plus a gateway test is not an integrated operator-to-device-plugin result.
 Use these terms consistently in issues, documentation, and release notes:
 
 1. **Rendering-tested**: unit tests confirm the expected Pod, resource request, mounts, and probes.
-2. **Runtime-tested**: vLLM serves a model on the accelerator outside Hearth's full lifecycle.
+2. **Runtime-tested**: vLLM serves a model on the accelerator outside Noctaya's full lifecycle.
 3. **Integrated**: the operator schedules the Pod through the device plugin and inference succeeds
-   through the Hearth gateway.
+   through the Noctaya gateway.
 4. **Scale-to-zero verified**: KEDA and the gateway complete `0 → 1 → configured maximum → 0`,
    including cold-start handling and an in-flight drain. State the device count when the maximum is
    one; that result is not evidence for multi-replica scaling.

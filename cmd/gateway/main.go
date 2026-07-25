@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Command gateway runs the Hearth data-plane proxy for a single LLMService.
+// Command gateway runs the Noctaya data-plane proxy for a single LLMService.
 package main
 
 import (
@@ -28,7 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/hearth-project/hearth/internal/gateway"
+	"github.com/noctaya/noctaya/internal/gateway"
 )
 
 var version = "dev"
@@ -58,9 +58,9 @@ func main() {
 	}
 
 	scalerAddr := os.Getenv(gateway.EnvScalerListenAddr)
-	log.Printf("Hearth gateway version %s listening on %s, backend %s", version, addr, cfg.BackendURL)
+	log.Printf("Noctaya gateway version %s listening on %s, backend %s", version, addr, cfg.BackendURL)
 	if scalerAddr != "" {
-		log.Printf("Hearth external scaler listening on %s", scalerAddr)
+		log.Printf("Noctaya external scaler listening on %s", scalerAddr)
 	}
 	if err := serve(gw, addr, scalerAddr); err != nil {
 		log.Fatalf("Gateway server failed: %v", err)

@@ -1,7 +1,7 @@
 //go:build e2e
 
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -91,7 +91,7 @@ var _ = Describe("scale-to-zero loop", Ordered, func() {
 		applyManifest("llmservice.yaml")
 	})
 
-	if os.Getenv("HEARTH_E2E_SCALER_MODE") == "metrics-api" {
+	if os.Getenv("NOCTAYA_E2E_SCALER_MODE") == "metrics-api" {
 		It("serves authenticated manager metrics", func() {
 			applyManifest("metrics.yaml")
 			Eventually(func() string {
@@ -131,7 +131,7 @@ var _ = Describe("scale-to-zero loop", Ordered, func() {
 
 		address := mustKubectl("get", "scaledobject", "stub-svc", "-n", namespace,
 			"-o", "jsonpath={.spec.triggers[0].metadata.scalerAddress}")
-		Expect(address).To(Equal("stub-svc-scaler.hearth-e2e.svc:9090"))
+		Expect(address).To(Equal("stub-svc-scaler.noctaya-e2e.svc:9090"))
 		mustKubectl("get", "service", "stub-svc-scaler", "-n", namespace)
 
 		forward := startPortForward("stub-svc")
@@ -146,7 +146,7 @@ var _ = Describe("scale-to-zero loop", Ordered, func() {
 				return ""
 			}
 			return string(content)
-		}, time.Minute, 2*time.Second).Should(ContainSubstring("hearth_gateway_scaler_streams 1"))
+		}, time.Minute, 2*time.Second).Should(ContainSubstring("noctaya_gateway_scaler_streams 1"))
 	})
 
 	It("wakes on a cold streaming request (0→1)", func() {
@@ -211,7 +211,7 @@ var _ = Describe("scale-to-zero loop", Ordered, func() {
 
 		By("terminating the backend pod while the stream is active")
 		output, err := kubectl("delete", "pod", "-n", namespace,
-			"-l", "serving.hearth.dev/llmservice=stub-drain", "--wait=false")
+			"-l", "serving.noctaya.io/llmservice=stub-drain", "--wait=false")
 		Expect(err).NotTo(HaveOccurred(), output)
 
 		var completed chatResult

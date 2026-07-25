@@ -1,6 +1,6 @@
 resources:
-- bases/serving.hearth.dev_inferenceruntimes.yaml
-- bases/serving.hearth.dev_llmservices.yaml
+- bases/serving.noctaya.io_inferenceruntimes.yaml
+- bases/serving.noctaya.io_llmservices.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

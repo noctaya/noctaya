@@ -6,11 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- Adopted the Noctaya identity across the Go module, binaries, container images, Helm chart,
+  Kubernetes object names, documentation website, examples, tests, and release automation.
+- Changed the alpha API group to `serving.noctaya.io`, the gateway queue endpoint to
+  `/noctaya/queue`, gateway metrics to the `noctaya_gateway_*` namespace, and gateway environment
+  variables to the `NOCTAYA_*` prefix. Existing alpha resources require explicit migration; no
+  conversion path is provided.
+
 ## [0.3.0] - 2026-07-19
 
 This alpha release adds immediate push-based cold activation, a current NVIDIA A10 profile, and
-expanded real-accelerator evidence for Hearth alongside Volcano and Kthena. The API remains
-`v1alpha1`, and Hearth is not production-ready for shared or customer-facing workloads.
+expanded real-accelerator evidence for Noctaya alongside Volcano and Kthena. The API remains
+`v1alpha1`, and Noctaya is not production-ready for shared or customer-facing workloads.
 
 ### Added
 - An opt-in, co-located KEDA ExternalScaler that streams cold activation immediately while retaining
@@ -18,7 +26,7 @@ expanded real-accelerator evidence for Hearth alongside Volcano and Kthena. The 
 - An activation lease for reject-mode cold starts, including current-state replay across scaler
   reconnects and a no-GPU E2E mode for the external-push path.
 - An NVIDIA A10 profile and reproducible K3s validation report for vLLM `v0.25.1`.
-- A hardware-neutral, command-driven Hearth and Kthena demo showing a hot model alongside a
+- A hardware-neutral, command-driven Noctaya and Kthena demo showing a hot model alongside a
   long-tail model that activates from zero and returns to zero.
 
 ### Changed
@@ -41,20 +49,20 @@ expanded real-accelerator evidence for Hearth alongside Volcano and Kthena. The 
 - Keep prerelease image publication from moving the stable `latest` operator and gateway tags.
 
 ### Verified
-- The v0.3.0-rc.1 release build completed the full Hearth lifecycle on two physical NVIDIA A10 GPUs
+- The v0.3.0-rc.1 release build completed the full Noctaya lifecycle on two physical NVIDIA A10 GPUs
   with vLLM `v0.25.1`, KEDA external-push, prewarming, `0→1→2→0`, bounded admission, reject mode,
   graceful drain, component replacement, and host reboot recovery.
 - Volcano `v1.15.0` enforced queue placement and quota on Kind, then scheduled the real A10
-  workloads through separate queues and placed two Hearth replicas on distinct whole GPUs.
-- A Kthena-managed hot model and a Hearth-managed long-tail model served concurrently on the same
-  host. Hearth recovered automatically after reboot; the documented Kthena device-admission race
-  required manual Pod replacement and remains outside Hearth's controller boundary.
+  workloads through separate queues and placed two Noctaya replicas on distinct whole GPUs.
+- A Kthena-managed hot model and a Noctaya-managed long-tail model served concurrently on the same
+  host. Noctaya recovered automatically after reboot; the documented Kthena device-admission race
+  required manual Pod replacement and remains outside Noctaya's controller boundary.
 
 ## [0.3.0-rc.1] - 2026-07-19
 
 This release candidate adds immediate push-based cold activation and a physically validated NVIDIA
 A10 profile while aligning bundled vLLM metrics and NVIDIA examples with current runtime behavior.
-Hearth remains alpha software with a `v1alpha1` API and is not production-ready.
+Noctaya remains alpha software with a `v1alpha1` API and is not production-ready.
 
 ### Added
 - An opt-in, co-located KEDA ExternalScaler that streams cold activation immediately while retaining
@@ -85,15 +93,15 @@ Hearth remains alpha software with a `v1alpha1` API and is not production-ready.
 - Two physical NVIDIA A10 GPUs completed the whole-device `0→1→2→0` lifecycle with real vLLM
   tokens, prewarming, cache persistence, backpressure, draining, recovery, and scale-down to zero.
 - Volcano `v1.15.0` on a three-node Kind cluster completed queue placement, quota enforcement, and
-  Hearth's `0→1→0` path with the CPU stub and a fake extended resource. Real-accelerator topology,
+  Noctaya's `0→1→0` path with the CPU stub and a fake extended resource. Real-accelerator topology,
   HAMi sharing, and gang scheduling remain separate validation work.
 
 ## [0.2.0] - 2026-07-17
 
-Alpha release completing Hearth's first integrated Ascend hardware-validation cycle and hardening
+Alpha release completing Noctaya's first integrated Ascend hardware-validation cycle and hardening
 the scale-to-zero control plane based on those results. Atlas 300I Duo is verified through the
 multi-replica `0→1→2→0` lifecycle, while Ascend 910B3 is verified through the complete
-single-device `0→1→0` lifecycle. Hearth remains `v1alpha1` and is not production-ready.
+single-device `0→1→0` lifecycle. Noctaya remains `v1alpha1` and is not production-ready.
 
 ### Added
 - A shared Ascend hardware-validation guide covering required images, validation levels, evidence,
@@ -107,7 +115,7 @@ single-device `0→1→0` lifecycle. Hearth remains `v1alpha1` and is not produc
   periods.
 
 ### Changed
-- Prometheus Operator resources and RBAC are decoupled from core reconciliation. Hearth now exposes
+- Prometheus Operator resources and RBAC are decoupled from core reconciliation. Noctaya now exposes
   stable metrics discovery labels while optional `ServiceMonitor` and Grafana assets live under
   `examples/observability/`.
 - Runtime metric fields are optional metadata for external observability; backend adapters and
@@ -174,7 +182,7 @@ not yet "supported." Still `v1alpha1` and not production-ready.
   (CANN 9.0.0 / driver 26.0.rc1, vllm-ascend 0.21.0rc1).
 - **Operator renders a correct 910B backend** (kind dry-run) — `huawei.com/Ascend910` request, CANN
   driver host-mounts, ModelScope cache wiring, load-gated probes; vendor selector resolves to `vllm-ascend`.
-- **Gateway data-plane on real NPU** — `/healthz`, `/hearth/queue` (incl. demand-linger), `/metrics`,
+- **Gateway data-plane on real NPU** — `/healthz`, `/noctaya/queue` (incl. demand-linger), `/metrics`,
   OpenAI passthrough (streaming + non-streaming), and cold-start SSE keepalive → activation timeout → `503`.
 
 ### Not yet verified
@@ -190,11 +198,11 @@ Not production-ready (see [ROADMAP.md](ROADMAP.md)).
 
 ### Added
 - **CRDs** — `LLMService` (namespaced) and `InferenceRuntime` (cluster-scoped, pluggable backend),
-  API group `serving.hearth.dev/v1alpha1`.
+  API group `serving.noctaya.io/v1alpha1`.
 - **NVIDIA backend** — renders the vLLM serving workload (image, templated args, accelerator
   resource, model-load-aware probes, metrics). **Ascend** adapter scaffolded + golden-tested
   (not yet run on NPUs).
-- **Scale-to-zero** — Hearth gateway (buffering reverse proxy) + KEDA `ScaledObject` on gateway
+- **Scale-to-zero** — Noctaya gateway (buffering reverse proxy) + KEDA `ScaledObject` on gateway
   queue depth; `0→1→N→0`, verified `1→2` across two GPU nodes.
 - **Cold-start handling** — SSE keepalive heartbeats, `reject` mode, load-gated readiness, bounded
   queue (`429`) and activation timeout (`503`).
@@ -212,9 +220,9 @@ Not production-ready (see [ROADMAP.md](ROADMAP.md)).
 ### Changed
 - Operator skips no-op `LLMService` status updates, avoiding optimistic-concurrency churn.
 
-[Unreleased]: https://github.com/hearth-project/hearth/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/hearth-project/hearth/compare/v0.3.0-rc.1...v0.3.0
-[0.3.0-rc.1]: https://github.com/hearth-project/hearth/compare/v0.2.0...v0.3.0-rc.1
-[0.2.0]: https://github.com/hearth-project/hearth/compare/v0.2.0-rc.1...v0.2.0
-[0.2.0-rc.1]: https://github.com/hearth-project/hearth/compare/v0.1.0...v0.2.0-rc.1
-[0.1.0]: https://github.com/hearth-project/hearth/releases/tag/v0.1.0
+[Unreleased]: https://github.com/noctaya/noctaya/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/noctaya/noctaya/compare/v0.3.0-rc.1...v0.3.0
+[0.3.0-rc.1]: https://github.com/noctaya/noctaya/compare/v0.2.0...v0.3.0-rc.1
+[0.2.0]: https://github.com/noctaya/noctaya/compare/v0.2.0-rc.1...v0.2.0
+[0.2.0-rc.1]: https://github.com/noctaya/noctaya/compare/v0.1.0...v0.2.0-rc.1
+[0.1.0]: https://github.com/noctaya/noctaya/releases/tag/v0.1.0

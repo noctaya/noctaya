@@ -1,28 +1,28 @@
-# Hearth and Kthena operational demo
+# Noctaya and Kthena operational walkthrough
 
-This silent, hardware-neutral demo shows two serving policies sharing one Kubernetes cluster:
-
-- Kthena keeps a frequently used model ready for low-latency traffic.
-- Hearth holds a long-tail model at zero replicas until a request arrives.
-- KEDA's external-push scaler activates the Hearth backend while the gateway keeps the client
-  connection alive with SSE heartbeats.
-- Volcano schedules both workloads without making the scheduler part of Hearth itself.
+This hardware-neutral walkthrough shows two serving policies sharing one Kubernetes cluster:
 
 https://github.com/user-attachments/assets/2d217dad-0280-4509-8793-dfd13ce0cdfa
 
-## What the recording proves
+- Kthena keeps a frequently used model ready for low-latency traffic.
+- Noctaya holds a long-tail model at zero replicas until a request arrives.
+- KEDA's external-push scaler activates the Noctaya backend while the gateway keeps the client
+  connection alive with SSE heartbeats.
+- Volcano schedules both workloads without making the scheduler part of Noctaya itself.
 
-1. The Kthena-managed hot model is Ready while the Hearth `LLMService` is `ScaledToZero`.
+## What the walkthrough demonstrates
+
+1. The Kthena-managed hot model is Ready while the Noctaya `LLMService` is `ScaledToZero`.
 2. The Kthena route returns a real OpenAI-compatible response.
-3. A request to the Hearth gateway creates demand and receives heartbeats during model startup.
+3. A request to the Noctaya gateway creates demand and receives heartbeats during model startup.
 4. KEDA activates the backend, and Kubernetes reports the backend Pod becoming Ready.
-5. The Hearth route returns a real OpenAI-compatible response.
-6. When demand ends, the Hearth backend returns to zero while the Kthena model remains Running.
+5. The Noctaya route returns a real OpenAI-compatible response.
+6. When demand ends, the Noctaya backend returns to zero while the Kthena model remains Running.
 
 ## Observe the same lifecycle
 
-The commands below assume Hearth, KEDA, Volcano, Kthena, a vendor device plugin, and compatible
-runtime profiles are already installed. Kthena remains an independent platform; Hearth does not
+The commands below assume Noctaya, KEDA, Volcano, Kthena, a vendor device plugin, and compatible
+runtime profiles are already installed. Kthena remains an independent platform; Noctaya does not
 install or reconcile its resources.
 
 Set the names used by your environment in each shell:
@@ -59,13 +59,13 @@ curl -sS http://127.0.0.1:8081/v1/chat/completions \
 JSON
 ```
 
-In one terminal, watch Hearth activation:
+In one terminal, watch Noctaya activation:
 
 ```bash
 kubectl get deployment "$LONGTAIL_MODEL" -n "$NAMESPACE" -w
 ```
 
-In another terminal, expose the stable Hearth gateway:
+In another terminal, expose the stable Noctaya gateway:
 
 ```bash
 kubectl port-forward -n "$NAMESPACE" "service/$LONGTAIL_MODEL" 8080:80
@@ -75,7 +75,7 @@ kubectl port-forward -n "$NAMESPACE" "service/$LONGTAIL_MODEL" 8080:80
 curl -N http://127.0.0.1:8080/v1/chat/completions \
   -H 'Content-Type: application/json' \
   --data-binary @- <<JSON
-{"model":"$LONGTAIL_MODEL","stream":true,"messages":[{"role":"user","content":"Reply with: Hearth long-tail pass"}]}
+{"model":"$LONGTAIL_MODEL","stream":true,"messages":[{"role":"user","content":"Reply with: Noctaya long-tail pass"}]}
 JSON
 ```
 
@@ -87,6 +87,6 @@ kubectl get hpa "keda-hpa-$LONGTAIL_MODEL" -n "$NAMESPACE"
 kubectl get deployment "$LONGTAIL_MODEL" -n "$NAMESPACE" -w
 ```
 
-External-push mode requires one gateway replica until Hearth supports demand aggregation across
-gateway Pods. Whole-device scheduling was used for the recorded run. The demo does not claim HAMi,
-MIG, fractional accelerators, multi-node topology, or production readiness.
+External-push mode requires one gateway replica until Noctaya supports demand aggregation across
+gateway Pods. The reference scenario uses whole-device scheduling and does not claim HAMi, MIG,
+fractional accelerators, multi-node topology, or production readiness.

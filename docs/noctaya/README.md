@@ -1,14 +1,14 @@
-# Hearth documentation website
+# Noctaya documentation website
 
 This directory contains the Docusaurus presentation layer for
-[hearth-project.dev](https://hearth-project.dev). Documentation content remains in the repository
+[noctaya.io](https://noctaya.io). Documentation content remains in the repository
 root:
 
 - `docs/**/*.md`;
 - `examples/README.md`; and
 - `CHANGELOG.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `ROADMAP.md`, and `SECURITY.md`.
 
-Do not copy those files into `docs/hearth/`. The Docusaurus docs plugin reads them directly so
+Do not copy those files into `docs/noctaya/`. The Docusaurus docs plugin reads them directly so
 code, examples, and documentation can change together.
 
 ## Develop locally
@@ -16,7 +16,7 @@ code, examples, and documentation can change together.
 Use Node.js 20 or newer:
 
 ```bash
-cd docs/hearth
+cd docs/noctaya
 npm ci
 npm start
 ```
@@ -27,7 +27,7 @@ and styles.
 ## Validate
 
 ```bash
-cd docs/hearth
+cd docs/noctaya
 npm run build
 npm run serve
 ```
@@ -39,5 +39,5 @@ used in CI.
 ## Publish
 
 `.github/workflows/docs.yml` builds and publishes the site through GitHub Pages after changes land
-on `main`. The artifact includes `static/CNAME` for `hearth-project.dev`; the repository's Pages
+on `main`. The artifact includes `static/CNAME` for `noctaya.io`; the repository's Pages
 settings and DNS records must point the domain to GitHub Pages.

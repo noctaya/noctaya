@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Hearth Authors.
+Copyright 2026 The Noctaya Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,8 +23,8 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	servingv1alpha1 "github.com/hearth-project/hearth/api/v1alpha1"
-	"github.com/hearth-project/hearth/internal/backend"
+	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
+	"github.com/noctaya/noctaya/internal/backend"
 )
 
 func scalingService() *servingv1alpha1.LLMService {
@@ -63,7 +63,7 @@ func TestScaledObjectMetricsAPITrigger(t *testing.T) {
 	g.Expect(trig["type"]).To(Equal("metrics-api"))
 
 	md := trig["metadata"].(map[string]any)
-	g.Expect(md["url"]).To(Equal("http://qwen3-8b.ai.svc/hearth/queue"))
+	g.Expect(md["url"]).To(Equal("http://qwen3-8b.ai.svc/noctaya/queue"))
 	g.Expect(md["valueLocation"]).To(Equal("pending"))
 	g.Expect(md["targetValue"]).To(Equal("10"))
 	g.Expect(md["activationTargetValue"]).To(Equal("0"))
