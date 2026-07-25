@@ -1,10 +1,16 @@
 **What type of PR is this?**
 
-- [ ] Bug fix
-- [ ] Feature or enhancement
-- [ ] Documentation
-- [ ] Refactor or cleanup
-- [ ] Security
+<!--
+Add one of the following kinds:
+
+/kind bug
+/kind cleanup
+/kind enhancement
+/kind security
+/kind documentation
+/kind feature
+
+-->
 
 **What this PR does / why we need it**:
 
