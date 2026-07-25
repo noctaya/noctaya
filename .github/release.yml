@@ -1,8 +1,6 @@
 changelog:
   exclude:
     authors:
-      - dependabot
-      - dependabot[bot]
       - github-actions
       - github-actions[bot]
   categories:
@@ -15,6 +13,9 @@ changelog:
     - title: 📖 Documentation
       labels:
         - documentation
+    - title: 📦 Dependencies
+      labels:
+        - dependencies
     - title: 🧪 Tests & CI
       labels:
         - test
