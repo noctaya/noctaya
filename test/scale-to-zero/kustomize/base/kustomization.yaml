@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../../../config/default
+
+images:
+  - name: controller
+    newName: hearth.dev/hearth
+    newTag: e2e
+
+patches:
+  - target:
+      kind: Deployment
+      labelSelector: control-plane=controller-manager
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/args
+        value:
+          - --metrics-bind-address=:8443
+          - --health-probe-bind-address=:8081
+          - --leader-elect
+          - --gateway-image=hearth.dev/hearth-gateway:e2e
+          - --gateway-replicas=1
+          - --scaler-mode=metrics-api

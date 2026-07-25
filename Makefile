@@ -56,52 +56,45 @@ test-docs: ## Install pinned documentation dependencies and build the Docusaurus
 	npm --prefix "$(DOCS_DIR)" ci
 	npm --prefix "$(DOCS_DIR)" run build
 
-KIND_CLUSTER ?= hearth-test-e2e
+E2E_KIND_CLUSTER ?= hearth-test-e2e
+E2E_KUBECONFIG ?= $(abspath $(LOCALBIN)/hearth-test-e2e.kubeconfig)
+E2E_SCALER_MODE ?= metrics-api
+E2E_KEDA_VERSION ?= 2.20.1
+E2E_MANAGER_IMG ?= hearth.dev/hearth:e2e
+E2E_GATEWAY_IMG ?= hearth.dev/hearth-gateway:e2e
+E2E_STUB_IMG ?= hearth.dev/vllm-stub:e2e
+E2E_ARCHIVE_DIR ?= $(abspath $(LOCALBIN)/e2e-images)
 
-.PHONY: setup-test-e2e
-setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
-	@command -v $(KIND) >/dev/null 2>&1 || { \
-		echo "Kind is not installed. Please install Kind manually."; \
-		exit 1; \
-	}
-	@case "$$($(KIND) get clusters)" in \
-		*"$(KIND_CLUSTER)"*) \
-			echo "Kind cluster '$(KIND_CLUSTER)' already exists. Skipping creation." ;; \
-		*) \
-			echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
-			$(KIND) create cluster --name $(KIND_CLUSTER) ;; \
-	esac
+.PHONY: load-e2e-images
+load-e2e-images:
+	rm -rf "$(E2E_ARCHIVE_DIR)"
+	mkdir -p "$(E2E_ARCHIVE_DIR)"
+	$(CONTAINER_TOOL) build --build-arg VERSION=$(VERSION) -t $(E2E_MANAGER_IMG) .
+	$(CONTAINER_TOOL) build --build-arg VERSION=$(VERSION) -f Dockerfile.gateway -t $(E2E_GATEWAY_IMG) .
+	$(CONTAINER_TOOL) build -f Dockerfile.stub -t $(E2E_STUB_IMG) .
+	$(CONTAINER_TOOL) save $(E2E_MANAGER_IMG) -o "$(E2E_ARCHIVE_DIR)/manager.tar"
+	$(KIND) load image-archive "$(E2E_ARCHIVE_DIR)/manager.tar" --name $(E2E_KIND_CLUSTER)
+	$(CONTAINER_TOOL) save $(E2E_GATEWAY_IMG) -o "$(E2E_ARCHIVE_DIR)/gateway.tar"
+	$(KIND) load image-archive "$(E2E_ARCHIVE_DIR)/gateway.tar" --name $(E2E_KIND_CLUSTER)
+	$(CONTAINER_TOOL) save $(E2E_STUB_IMG) -o "$(E2E_ARCHIVE_DIR)/stub.tar"
+	$(KIND) load image-archive "$(E2E_ARCHIVE_DIR)/stub.tar" --name $(E2E_KIND_CLUSTER)
+	rm -rf "$(E2E_ARCHIVE_DIR)"
 
 .PHONY: test-e2e
-test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
-	$(MAKE) cleanup-test-e2e
-
-.PHONY: cleanup-test-e2e
-cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
-	@$(KIND) delete cluster --name $(KIND_CLUSTER)
-
-# Assumes a running Kind cluster (current kube-context) with KEDA already installed.
-SCALE_KIND_CLUSTER ?= kind
-SCALE_GATEWAY_IMG ?= hearth.dev/hearth-gateway:e2e
-SCALE_SCALER_MODE ?= metrics-api
-SCALE_STUB_ARCHIVE ?= /tmp/hearth-stub.tar
-SCALE_GATEWAY_ARCHIVE ?= /tmp/hearth-gateway.tar
-
-.PHONY: load-scale-images
-load-scale-images: ## Build the stub + gateway images and load them into the Kind cluster (CONTAINER_TOOL-agnostic).
-	$(CONTAINER_TOOL) build -f Dockerfile.stub -t $(STUB_IMG) .
-	$(CONTAINER_TOOL) build -f Dockerfile.gateway -t $(SCALE_GATEWAY_IMG) .
-	rm -f "$(SCALE_STUB_ARCHIVE)" "$(SCALE_GATEWAY_ARCHIVE)"
-	$(CONTAINER_TOOL) save $(STUB_IMG) -o "$(SCALE_STUB_ARCHIVE)"
-	$(KIND) load image-archive "$(SCALE_STUB_ARCHIVE)" --name $(SCALE_KIND_CLUSTER)
-	$(CONTAINER_TOOL) save $(SCALE_GATEWAY_IMG) -o "$(SCALE_GATEWAY_ARCHIVE)"
-	$(KIND) load image-archive "$(SCALE_GATEWAY_ARCHIVE)" --name $(SCALE_KIND_CLUSTER)
-	rm -f "$(SCALE_STUB_ARCHIVE)" "$(SCALE_GATEWAY_ARCHIVE)"
-
-.PHONY: test-scale-e2e
-test-scale-e2e: manifests generate load-scale-images ## Run the no-GPU scale-to-zero e2e (needs a Kind cluster with KEDA).
-	HEARTH_E2E_SCALER_MODE=$(SCALE_SCALER_MODE) go test -tags=e2e ./test/scaletozero/ -v -ginkgo.v -timeout 20m
+test-e2e: kustomize ## Run one scaler-mode E2E lifecycle in an isolated disposable Kind cluster.
+	@CONTAINER_TOOL="$(CONTAINER_TOOL)" \
+		E2E_GATEWAY_IMG="$(E2E_GATEWAY_IMG)" \
+		E2E_KEDA_VERSION="$(E2E_KEDA_VERSION)" \
+		E2E_KIND_CLUSTER="$(E2E_KIND_CLUSTER)" \
+		E2E_KUBECONFIG="$(E2E_KUBECONFIG)" \
+		E2E_MANAGER_IMG="$(E2E_MANAGER_IMG)" \
+		E2E_SCALER_MODE="$(E2E_SCALER_MODE)" \
+		E2E_STUB_IMG="$(E2E_STUB_IMG)" \
+		HELM="$(HELM)" \
+		KIND="$(KIND)" \
+		KUBECTL="$(KUBECTL)" \
+		KUSTOMIZE="$(abspath $(KUSTOMIZE))" \
+		bash test/scale-to-zero/run-e2e.sh
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -204,6 +197,7 @@ $(LOCALBIN):
 ## Tool Binaries
 KUBECTL ?= kubectl
 KIND ?= kind
+HELM ?= helm
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
