@@ -1,72 +1,65 @@
 # CRD reference
 
-Noctaya CRDs use API group `serving.noctaya.io/v1alpha1`. This page documents the user-facing fields
-from
-[`api/v1alpha1/`](https://github.com/noctaya/noctaya/tree/main/api/v1alpha1)
-and the generated CRD schemas. The API remains alpha: fields reserved for planned features may be
-accepted by Kubernetes but rejected during reconciliation. Those fields are marked below; schema
-presence alone is not a support claim.
+Noctaya exposes two resources in `serving.noctaya.io/v1alpha1`.
+
+| Resource | Scope | Purpose |
+|---|---|---|
+| `LLMService` | Namespaced | Declares a model endpoint and its resources, scaling, cache, and cold-start behavior |
+| `InferenceRuntime` | Cluster | Defines a reusable serving image and its accelerator, scheduling, health, and lifecycle integration |
+
+The API is alpha. Kubernetes may accept reserved fields that the controller cannot yet reconcile; those fields are marked **not implemented** below. The Go types in [`api/v1alpha1`](https://github.com/noctaya/noctaya/tree/main/api/v1alpha1) and the generated CRDs remain authoritative.
+
+Durations use Go/Kubernetes syntax such as `10s`, `2m`, and `5m`. Resource quantities use Kubernetes syntax such as `500m`, `32Gi`, and `60Gi`.
 
 ## LLMService
 
-`LLMService` is a namespaced resource that describes what model to serve, which runtime to use, how
-many accelerator resources to request, how to scale, how to cache model weights, and how cold starts
-should behave.
+The schema requires `spec.model`. A working service also needs `spec.model.source.uri` and either `spec.runtime.name` or `spec.runtime.selector.vendor`; otherwise reconciliation reports `Degraded`.
 
-Only `spec.model` is required by the CRD schema. Other sections are optional and use the defaults
-shown below when a default is defined.
+### Model and runtime
 
-For a service that can reconcile in the current implementation, set `spec.model.source.uri` and
-select a runtime with either `spec.runtime.name` or `spec.runtime.selector.vendor`. Catalog-only
-models and an omitted runtime are admitted by the alpha schema but reported as `Degraded`.
-
-| Field | Type | Default / enum | Description |
+| Field | Type | Default / constraint | Behavior |
 |---|---|---|---|
-| `spec.model` | object | required | Model identity and source. |
-| `spec.model.catalogRef` | string | - | Reserved for model-catalog resolution and currently rejected. Use `spec.model.source.uri`. |
-| `spec.model.source` | object | - | Inline model source configuration. |
-| `spec.model.source.uri` | string | required when `source` is set | Model location. Supported schemes are `hf://` (with `huggingface://` as an alias), `modelscope://`, and `pvc://<claim>[/<subpath>]`. A `pvc://` source mounts pre-staged weights read-only at `/models`, performs no download, and should use `cache.strategy: None`. `oci://` and `s3://` are not implemented. |
-| `spec.model.source.secretRef` | object | - | Reserved for private model sources; currently rejected during reconciliation. |
-| `spec.model.source.secretRef.name` | string | `""` | Name of the Secret holding source credentials. |
-| `spec.runtime` | object | - | Backend runtime selection. Pin a runtime by name or provide a vendor preference selector. |
-| `spec.runtime.name` | string | - | Exact `InferenceRuntime` name to use, such as `vllm-nvidia-a100`. |
-| `spec.runtime.selector` | object | - | Runtime auto-selection criteria. |
-| `spec.runtime.selector.vendor` | string array | - | Acceptable vendors in preference order, for example `["nvidia", "ascend"]`. |
-| `spec.runtime.argsOverride` | string array | - | Arguments appended after the selected runtime's templated arguments. A duplicate flag may override an earlier value when supported by the runtime CLI. |
-| `spec.resources` | object | - | Abstract accelerator, CPU, and memory request mapped onto the selected runtime at reconcile time. |
-| `spec.resources.accelerators` | integer | `1`, minimum `1` | Number of whole accelerator devices to request. |
-| `spec.resources.fraction` | object | - | Reserved for sub-device sharing; currently rejected during reconciliation. |
-| `spec.resources.fraction.memory` | quantity | - | Memory portion for a fractional accelerator request. |
-| `spec.resources.fraction.cores` | integer | - | Core count for a fractional accelerator request. |
-| `spec.resources.cpu` | quantity | - | CPU request for the serving workload. |
-| `spec.resources.memory` | quantity | - | Equal memory request and limit for each backend replica. |
-| `spec.scaling` | object | - | KEDA-driven autoscaling configuration. Noctaya supports LLM-aware signals rather than CPU or raw RPS. |
-| `spec.scaling.min` | integer | `0`, minimum `0` | Minimum backend replicas. `0` enables scale-to-zero. |
-| `spec.scaling.max` | integer | `1`, minimum `1` | Maximum backend replicas. |
-| `spec.scaling.metric` | string | default `queueDepth`; enum `queueDepth`, `kvCacheUtil` | `queueDepth` drives scaling. `kvCacheUtil` is reserved and rejected during reconciliation. |
-| `spec.scaling.target` | integer | `10`, minimum `1` | Desired metric value per replica. |
-| `spec.scaling.activationTimeout` | duration string | `5m` | Cold-activation deadline. In `keepalive` mode it bounds how long a request waits for readiness; in `reject` mode it bounds the demand lease retained after the immediate `503`. |
-| `spec.scaling.scaleDownStabilization` | duration string | `5m` | HPA stabilization window for scale-down and KEDA cooldown before the final transition to zero. Use whole seconds from `0s` through the HPA limit of `1h`. |
-| `spec.scaling.drainTimeout` | duration string | `2m` | Pre-stop wait for in-flight requests when the selected runtime sets `spec.lifecycle.preStopDrain: true`. Noctaya widens the Pod termination grace period to this timeout plus a shutdown margin when needed. |
-| `spec.cache` | object | - | Model-weight cache configuration for reducing cold-start downloads. |
-| `spec.cache.strategy` | string | default `NodeLocalPVC`; enum `NodeLocalPVC`, `HostPath`, `SharedPVC`, `BakedImage`, `None` | Cache backend. `NodeLocalPVC`, `HostPath`, and `None` are implemented. `SharedPVC` and `BakedImage` are reserved and rejected during reconciliation. |
-| `spec.cache.size` | quantity | `50Gi` (controller default) | Requested cache PVC size for `NodeLocalPVC`. |
-| `spec.cache.storageClassName` | string | - | StorageClass for the cache PVC. Empty uses the cluster default. |
-| `spec.cache.prewarm` | boolean | `false` | Creates a one-time Job that hydrates model weights for `NodeLocalPVC` or `HostPath`. It is skipped for `pvc://` sources because those weights are already staged. |
-| `spec.endpoint` | object | - | Client-facing endpoint behavior. |
-| `spec.endpoint.openAICompatible` | boolean | `true` | Informational in the current implementation; the gateway always exposes the OpenAI-compatible API. |
-| `spec.endpoint.coldStart` | object | - | Behavior for requests received while the backend is scaled to zero or still loading. |
-| `spec.endpoint.coldStart.mode` | string | default `keepalive`; enum `keepalive`, `reject` | `keepalive` holds streaming requests open with SSE heartbeats; `reject` returns fast `503 + Retry-After`. |
-| `spec.endpoint.coldStart.heartbeatInterval` | duration string | `10s` | Interval between keepalive heartbeats while a cold streaming request is waiting. |
-| `spec.imagePullSecrets` | object array | - | `LocalObjectReference`s applied to the backend, gateway, and prewarm pods so images from private / air-gapped registries can be pulled. The named Secrets must exist in the LLMService's namespace. |
-| `spec.imagePullSecrets[].name` | string | `""` | Name of an image-pull Secret in the LLMService's namespace. |
+| `spec.model.source.uri` | string | Required for reconciliation | Supports `hf://` (`huggingface://` alias), `modelscope://`, and `pvc://<claim>[/<subpath>]` |
+| `spec.model.catalogRef` | string | **Not implemented** | Reserved for model-catalog lookup |
+| `spec.model.source.secretRef` | `LocalObjectReference` | **Not implemented** | Reserved for private-source credentials |
+| `spec.runtime.name` | string | Optional | Pins one cluster-scoped `InferenceRuntime`; takes precedence over a selector |
+| `spec.runtime.selector.vendor` | string array | Optional | Selects the first available vendor in order, then the highest-priority runtime |
+| `spec.runtime.argsOverride` | string array | Optional | Appends arguments after the runtime's templated arguments |
 
-Kubernetes quantity fields accept standard resource quantity strings such as `8`, `500m`, `32Gi`,
-or `60Gi`. Duration fields use Go/Kubernetes duration strings such as `10s`, `2m`, or `5m`.
+A `pvc://` source mounts existing weights read-only at `/models` and performs no download. Use `cache.strategy: None` to avoid creating a separate cache PVC. Other URI schemes, including `oci://` and `s3://`, are not implemented.
 
-Cache PVCs and prewarm Jobs contain immutable fields and are created once. Changing the model or
-cache settings does not rewrite an existing `<service>-prewarm` Job or `<service>-cache` PVC. Delete
-the Job to rerun prewarming; replace a PVC only after preserving any data you need.
+### Resources and scaling
+
+| Field | Type | Default / constraint | Behavior |
+|---|---|---|---|
+| `spec.resources.accelerators` | integer | `1`; minimum `1` | Whole devices requested per backend replica |
+| `spec.resources.cpu` | quantity | Optional | CPU request per backend replica |
+| `spec.resources.memory` | quantity | Optional | Equal memory request and limit per backend replica |
+| `spec.resources.fraction` | object | **Not implemented** | Reserved for sub-device sharing |
+| `spec.scaling.min` | integer | `0`; minimum `0` | Minimum backend replicas; `0` enables scale-to-zero |
+| `spec.scaling.max` | integer | `1`; minimum `1` | Maximum backend replicas; must be at least `min` |
+| `spec.scaling.metric` | string | `queueDepth`; `queueDepth` or `kvCacheUtil` | Only `queueDepth` is implemented |
+| `spec.scaling.target` | integer | `10`; minimum `1` | Queue-depth target per backend replica |
+| `spec.scaling.activationTimeout` | duration | `5m` | Bounds a cold request wait or reject-mode activation lease |
+| `spec.scaling.scaleDownStabilization` | duration | `5m`; whole seconds, `0s..1h` | HPA stabilization and KEDA cooldown before scale-to-zero |
+| `spec.scaling.drainTimeout` | duration | `2m` | Pre-stop drain time when the runtime enables `preStopDrain` |
+
+KEDA owns backend replicas; `min` and `max` do not control gateway replicas.
+
+### Cache and endpoint
+
+| Field | Type | Default / constraint | Behavior |
+|---|---|---|---|
+| `spec.cache.strategy` | string | `NodeLocalPVC` | Implements `NodeLocalPVC`, `HostPath`, and `None`; `SharedPVC` and `BakedImage` are not implemented |
+| `spec.cache.size` | quantity | `50Gi` controller default | PVC request for `NodeLocalPVC` |
+| `spec.cache.storageClassName` | string | Cluster default | Selects the cache PVC StorageClass |
+| `spec.cache.prewarm` | boolean | `false` | Creates one download Job for `hf://` or `modelscope://` with a persistent cache |
+| `spec.endpoint.openAICompatible` | boolean | `true` | Informational; the gateway currently always serves the OpenAI-compatible API |
+| `spec.endpoint.coldStart.mode` | string | `keepalive`; `keepalive` or `reject` | Holds streaming requests with SSE heartbeats or returns `503` with `Retry-After` |
+| `spec.endpoint.coldStart.heartbeatInterval` | duration | `10s` | Keepalive heartbeat interval during activation |
+| `spec.imagePullSecrets` | `LocalObjectReference` array | Optional | Applied to backend, gateway, and prewarm Pods; Secrets must be in the service namespace |
+
+Cache PVCs and prewarm Jobs are create-once resources. Delete the Job to prewarm again; preserve needed data before replacing a PVC.
 
 ### LLMService status
 
@@ -80,47 +73,49 @@ the Job to rerun prewarming; replace a PVC only after preserving any data you ne
 
 ## InferenceRuntime
 
-`InferenceRuntime` is cluster-scoped configuration consumed by the `LLMService` controller. Its own
-controller is passive. Changing a runtime requeues services that pin it or select its vendor.
+`InferenceRuntime` is reusable configuration, not a workload. Its controller is passive; the `LLMService` controller consumes it and requeues matching services when it changes.
 
-| Field | Type | Default / enum | Description |
+### Runtime and container
+
+| Field | Type | Default / constraint | Behavior |
 |---|---|---|---|
-| `spec.family` | string | required; default and only value `vllm` | Serving-engine family. |
-| `spec.vendor` | string | required; enum `nvidia`, `ascend` | Registered backend adapter key. |
-| `spec.priority` | integer | `0` | Tie-breaker within one vendor; higher values win. Vendor preference order wins before priority. Equal top priorities are rejected as ambiguous, so pin `spec.runtime.name` in that case. |
-| `spec.container` | object | required | Serving-container definition. |
-| `spec.container.image` | string | required | Image that exposes an OpenAI-compatible API. |
-| `spec.container.args` | string array | - | Go templates rendered with `.Model.Path`, `.Service.Name`, and `.Service.Namespace`. `LLMService.spec.runtime.argsOverride` values are appended. |
-| `spec.container.env` | Kubernetes `EnvVar` array | - | Environment copied to the container. Literal `value` strings may use the same templates; normal `valueFrom` sources remain available. |
-| `spec.container.port` | object | required | Named TCP port for the serving API and, when the runtime exposes them there, metrics. |
-| `spec.container.port.name` | string | `http` | Port name referenced by Services and probes. |
-| `spec.container.port.containerPort` | integer | `8000`; range `1..65535` | Serving-container port number. |
-| `spec.accelerator` | object | required | Device-plugin resource and Pod scheduling constraints. |
-| `spec.accelerator.resourceName` | string | required | Extended resource advertised by the installed device plugin, such as `nvidia.com/gpu` or `huawei.com/Ascend910`. |
-| `spec.accelerator.sharing` | object | - | Reserved fractional-device capability metadata. No current adapter implements fractional allocation. |
-| `spec.accelerator.sharing.supported` | boolean | `false` | Declares runtime capability only; setting it to `true` does not enable sharing, and `LLMService.spec.resources.fraction` is currently rejected. |
-| `spec.accelerator.nodeSelector` | string map | - | Node labels copied to backend and prewarm Pods. |
-| `spec.accelerator.tolerations` | Kubernetes `Toleration` array | - | Tolerations copied to backend and prewarm Pods. |
-| `spec.accelerator.scheduler` | object | - | Routes backend and prewarm Pods through an already-installed scheduler. |
-| `spec.accelerator.scheduler.name` | string | empty (default scheduler) | Pod `schedulerName`, for example `volcano`. |
-| `spec.accelerator.scheduler.queue` | string | - | Volcano queue rendered as the `scheduling.volcano.sh/queue-name` Pod annotation. A non-empty queue is rejected unless `scheduler.name` is `volcano`. |
-| `spec.health` | object | - | Model-load-aware serving probes. |
-| `spec.health.readiness` | Kubernetes `Probe` | controller default: HTTP `GET /health` | Controls when the backend receives traffic. |
-| `spec.health.liveness` | Kubernetes `Probe` | none | Detects a failed process after startup. |
-| `spec.health.startup` | Kubernetes `Probe` | controller default: HTTP `GET /health`, about 10 minutes | Protects slow model loading from liveness restarts. |
-| `spec.lifecycle` | object | - | Graceful serving-Pod termination settings. |
-| `spec.lifecycle.terminationGracePeriodSeconds` | integer | Kubernetes default; minimum `1` when set | Base Pod shutdown budget. Noctaya widens it to cover `drainTimeout` plus 10 seconds when draining is enabled. |
-| `spec.lifecycle.preStopDrain` | boolean | `false` | Adds a pre-stop wait for `LLMService.spec.scaling.drainTimeout`. The serving image must contain `/bin/sh`. |
-| `spec.metrics` | object | - | Runtime metric metadata for external integrations. Noctaya autoscaling uses gateway demand and does not consume these names. |
-| `spec.metrics.path` | string | `/metrics` | Runtime Prometheus scrape path. |
-| `spec.metrics.port` | string | `http` | Service port that exposes runtime metrics. |
-| `spec.metrics.queueDepth` | string | required when `metrics` is set | Runtime pending-request metric name. |
-| `spec.metrics.kvCacheUtil` | string | - | Runtime KV-cache-utilization metric name. |
-| `spec.metrics.running` | string | - | Runtime in-flight-request metric name. |
-| `spec.metrics.ttft` | string | - | Runtime time-to-first-token metric name. |
+| `spec.family` | string | `vllm`; only `vllm` | Serving-engine family |
+| `spec.vendor` | string | Required; `nvidia` or `ascend` | Selects the registered backend adapter |
+| `spec.priority` | integer | `0` | Higher value wins within a selected vendor; equal top values are ambiguous |
+| `spec.container.image` | string | Required | Serving image exposing an OpenAI-compatible API |
+| `spec.container.args` | string array | Optional | Templates using `.Model.Path`, `.Service.Name`, and `.Service.Namespace` |
+| `spec.container.env` | Kubernetes `EnvVar` array | Optional | Copied to the container; literal values support the same templates |
+| `spec.container.port.name` | string | `http` | Port name used by Services and probes |
+| `spec.container.port.containerPort` | integer | `8000`; `1..65535` | Serving API port |
 
-Runtime definitions describe Kubernetes integration; they do not install drivers, device plugins,
-CANN, schedulers, or inference kernels. Because the `InferenceRuntime` controller is passive, its
-`status.conditions` field is not currently populated; operational state is reported on each
-`LLMService` that consumes the runtime. Planned unsupported directions are summarized in the
-[roadmap](../ROADMAP.md).
+`spec.container` and `spec.container.port` are required objects. Runtime arguments are rendered first; `LLMService.spec.runtime.argsOverride` is appended.
+
+### Accelerator and scheduling
+
+| Field | Type | Default / constraint | Behavior |
+|---|---|---|---|
+| `spec.accelerator.resourceName` | string | Required | Device-plugin resource, for example `nvidia.com/gpu` |
+| `spec.accelerator.sharing.supported` | boolean | `false`; **not implemented** | Capability placeholder; it does not enable fractional allocation |
+| `spec.accelerator.nodeSelector` | string map | Optional | Copied to backend and prewarm Pods |
+| `spec.accelerator.tolerations` | Kubernetes `Toleration` array | Optional | Copied to backend and prewarm Pods |
+| `spec.accelerator.scheduler.name` | string | Kubernetes default scheduler | Sets Pod `schedulerName`, for example `volcano` |
+| `spec.accelerator.scheduler.queue` | string | Requires `scheduler.name: volcano` | Adds the Volcano queue annotation |
+
+The runtime references existing drivers, device plugins, and schedulers; it does not install or manage them.
+
+### Health, lifecycle, and metrics
+
+| Field | Default / constraint | Behavior |
+|---|---|---|
+| `spec.health.readiness` | Controller default: HTTP `GET /health` | Gates backend traffic until the model is loaded |
+| `spec.health.startup` | Controller default: `GET /health`, 10-second period, 60 failures | Allows about 10 minutes for startup |
+| `spec.health.liveness` | None | Optional post-start failure detection |
+| `spec.lifecycle.terminationGracePeriodSeconds` | Optional; minimum `1` | Base Pod shutdown budget |
+| `spec.lifecycle.preStopDrain` | `false` | Sleeps for the service `drainTimeout`; requires `/bin/sh` in the image |
+| `spec.metrics.path` / `port` | `/metrics` / `http` | External scrape metadata |
+| `spec.metrics.queueDepth` | Required when `metrics` is set | Runtime queue metric name |
+| `spec.metrics.kvCacheUtil` / `running` / `ttft` | Optional | Additional external metric names |
+
+When drain is enabled, Noctaya widens the termination grace period to at least `drainTimeout` plus 10 seconds. Runtime metric names are metadata only; autoscaling uses gateway demand.
+
+`InferenceRuntime.status.conditions` is declared but not populated because the controller is passive. Operational state is reported on each consuming `LLMService`. See the [roadmap](../ROADMAP.md) for planned features.

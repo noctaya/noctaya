@@ -1,144 +1,114 @@
 # Architecture
 
-Noctaya is a minimal, composable LLM serving control plane for private Kubernetes clusters. A single
-`LLMService` manifest produces a declarative, queue-driven, **scale-to-zero** model server across
-NVIDIA, Ascend, and other accelerators.
+Noctaya is a composable Kubernetes control plane for running model servers that can release accelerators when idle and recover safely on the next request.
 
-## Boundary (what Noctaya is, and isn't)
+## Problem
 
-Noctaya owns the **Kubernetes orchestration / lifecycle layer**: rendering workloads, model loading,
-health, scheduling adaptation, scale-to-zero, and stable metrics surfaces. It deliberately does
-**not** re-implement the inference engine (that's **vLLM** + vendor plugins) or write chip kernels /
-device plugins / schedulers (that's the vendors, **HAMi**, **Volcano**). Fleet routing,
-prefill/decode disaggregation,
-and datacenter scale-out belong to **Kthena**, **AIBrix**, and **KServe**/**llm-d**; Noctaya composes
-with them as the lightweight, scale-to-zero end of that axis (see
-["Noctaya and Kthena"](https://noctaya.io/#noctaya-and-kthena)). A new accelerator is a thin
-adapter, not a rewrite.
+Scaling a model backend to zero saves accelerator capacity, but makes the next request a multi-stage cold start: Kubernetes must schedule a Pod, pull its image, make model weights available, load the model, and pass readiness checks. Each stage has a different latency tail.
+During that time there is no ready backend, and an unbounded request queue can overload the gateway before the model starts.
 
-## CRDs
+Model definitions also become difficult to reuse when container arguments, device resources, scheduler settings, and vendor-specific behavior are embedded in every workload.
 
-API group `serving.noctaya.io/v1alpha1`.
+Noctaya solves these problems by:
 
-- **`LLMService`** (namespaced, user-facing) — *what* to serve and *how* to scale: the model source,
-  a runtime selection (pin a backend or auto-pick by vendor), abstract resources, scaling intent
-  (incl. `min: 0` for scale-to-zero), cache strategy, and cold-start behavior.
-- **`InferenceRuntime`** (cluster-scoped, reusable) — a *pluggable backend driver*: container image +
-  templated args, the device-plugin resource name (e.g. `nvidia.com/gpu`, `huawei.com/Ascend910`),
-  scheduling (nodeSelector/tolerations/scheduler), model-load-aware probes, lifecycle (drain), and
-  optional runtime metric metadata. This is the multi-backend differentiator.
+- keeping a lightweight, stable gateway available while the model backend is at zero;
+- bounding cold-request admission and preserving demand until activation succeeds or times out;
+- using KEDA to own backend replica scaling from `0..N`;
+- separating model intent (`LLMService`) from reusable runtime and accelerator details (`InferenceRuntime`);
+- coordinating cache prewarming, model-aware readiness, and graceful drain.
 
-## Components
+Noctaya makes cold starts controlled and observable; it does not make model loading instantaneous.
 
-- **Operator / controllers** (`internal/controller`) — reconcile an `LLMService` (+ its
-  `InferenceRuntime`) into the child objects below via server-side apply, gracefully skipping the
-  optional KEDA CRD when absent.
-- **Backend abstraction** (`internal/backend`) — a `BackendAdapter` interface + registry. Shared code
-  renders the vLLM pod and accelerator request; thin NVIDIA and Ascend adapters add vendor
-  specifics. Adapters are rendering-tested without claiming hardware validation.
-- **Gateway** (`internal/gateway`) — the data plane: an OpenAI-compatible reverse proxy in front of
-  each `LLMService`. It buffers requests during cold start, applies bounded-queue backpressure,
-  emits SSE keepalive heartbeats (or fast-rejects), drains in-flight streams on scale-down, and
-  exposes its pending-request count over HTTP and, when enabled, KEDA's ExternalScaler gRPC API.
+## Boundary
 
-## Reconcile output
+| Noctaya owns | Installed and managed separately |
+|---|---|
+| Workload rendering, runtime selection, model cache/prewarm, health, drain, gateway admission, scaling intent, and status | Inference engines and vendor plugins, accelerator drivers and device plugins, KEDA, schedulers such as Volcano or HAMi, and monitoring stacks |
 
-For one `LLMService`, the operator renders: a vLLM **Deployment** (it does *not* set `replicas` —
-KEDA owns `0..N`), a backend **Service**, a **gateway** Deployment + Service, a model **cache**
-(PVC/HostPath) + optional **prewarm Job**, and a KEDA **ScaledObject**. External-push mode also
-creates a cluster-internal scaler Service for the gateway's gRPC port.
+Inference kernels, fleet routing, prefill/decode disaggregation, and multi-cluster scheduling are outside Noctaya's scope.
+It can coexist with higher-level platforms such as Kthena, AIBrix, KServe, and llm-d; see [Noctaya and Kthena](https://noctaya.io/#noctaya-and-kthena).
+Accelerator integrations remain thin Kubernetes translations rather than vendor runtime implementations.
 
-```mermaid
-flowchart TD
-  llm["LLMService<br/>(+ InferenceRuntime)"] --> op["Noctaya operator"]
-  op --> dep["vLLM Deployment<br/>(replicas owned by KEDA)"]
-  op --> bsvc["Backend Service"]
-  op --> gwd["Gateway Deployment + Service"]
-  op -.-> scaler["Internal scaler Service<br/>(external-push only)"]
-  op --> cache["Model cache (PVC/HostPath)<br/>+ optional prewarm Job"]
-  op --> so["KEDA ScaledObject"]
-```
+## API model
 
-## Scale-to-zero data flow
+The API group is `serving.noctaya.io/v1alpha1`.
+
+| Resource | Scope | Purpose |
+|---|---|---|
+| `LLMService` | Namespaced | Declares the model, runtime selection, resources, scaling, cache, and endpoint behavior |
+| `InferenceRuntime` | Cluster | Defines a reusable runtime image and arguments, accelerator resource, scheduling, probes, lifecycle, and optional metric metadata |
+
+`InferenceRuntime` is configuration, not a workload. Its controller is passive; the `LLMService` reconciler selects and consumes it.
+
+## Design
+
+| Component | Responsibility |
+|---|---|
+| Operator (`internal/controller`) | Selects a runtime and reconciles the per-model Kubernetes resources |
+| Backend layer (`internal/backend`) | Renders common vLLM resources; thin adapters translate NVIDIA or Ascend details |
+| Gateway (`internal/gateway`) | Provides the stable OpenAI-compatible endpoint, bounded admission, readiness-aware proxying, drain, and queue metrics |
+| KEDA | Reads demand and owns backend replicas; it is required for `LLMService` scaling but installed independently |
+
+Each `LLMService` produces a backend Deployment and Service, a gateway Deployment and Service, a KEDA `ScaledObject`, and—when requested—cache and prewarm resources. External-push mode also creates an internal scaler Service. The operator deliberately omits backend `replicas`; KEDA owns that field.
 
 ```mermaid
-flowchart LR
+flowchart TB
+  llm["LLMService"]
+  runtime["InferenceRuntime"]
+  operator["Noctaya operator"]
   client(["Inference client"])
-  subgraph dp["Data plane"]
-    gw["Noctaya Gateway<br/>buffer · backpressure<br/>keepalive · drain"]
-  end
-  subgraph wl["Workload"]
-    svc["Backend Service"]
-    pods["vLLM pods (0..N)"]
-    cache[("Model cache<br/>PVC / HostPath")]
-  end
-  subgraph cp["Autoscaling"]
-    keda["KEDA core"]
-    so["ScaledObject"]
-  end
-  client -->|"OpenAI API"| gw
-  gw -->|"forward when Ready"| svc --> pods
-  pods -.->|"load weights"| cache
-  keda -->|"poll /noctaya/queue (default)<br/>or StreamIsActive + GetMetrics"| gw
-  keda --> so
-  so -->|"scale 0..N"| pods
+  gateway["Gateway<br/>always available"]
+  backend["Model backend<br/>0..N replicas"]
+  cache[("Cache / prewarm")]
+  scaled["ScaledObject"]
+  keda["KEDA"]
 
-  classDef plane fill:#eef6ff,stroke:#4a90d9,color:#1b3a5b;
-  classDef work fill:#f3f0ff,stroke:#8b5cf6,color:#3b2a6b;
-  classDef auto fill:#fff7ed,stroke:#fb923c,color:#7c3a12;
-  class gw plane;
-  class svc,pods,cache work;
-  class keda,so auto;
+  llm --> operator
+  runtime --> operator
+  operator --> gateway
+  operator --> backend
+  operator -.-> cache
+  operator --> scaled
+  client -->|"OpenAI API"| gateway
+  gateway -->|"forward when Ready"| backend
+  cache -.->|"load weights"| backend
+  keda -.->|"metrics-api poll"| gateway
+  gateway -.->|"external-push activation"| keda
+  scaled --> keda
+  keda -->|"own replicas"| backend
 ```
 
-1. **Idle** — KEDA holds the backend Deployment at **0**.
-2. **Cold request** — the gateway admits the request (bounded queue → `429` if full), raises its
-   `pending` count, and holds the connection. In `keepalive` mode it streams SSE heartbeats so the
-   client/ingress don't time out; in `reject` mode it returns `503 + Retry-After` and the client retries.
-3. **Activation** — in the default `metrics-api` mode, KEDA polls `/noctaya/queue`. In opt-in
-   `external-push` mode, the co-located ExternalScaler sends an active event immediately and KEDA
-   continues to call `GetMetrics` for the queue value. Either path drives the Deployment **0 → 1**.
-   The pod loads weights from cache and becomes **Ready** only after the model is loaded.
-4. **Serve** — the gateway forwards the buffered request and streams tokens back.
-5. **Scale up** — sustained queue depth above the per-replica target scales **1 → N** (one whole
-   device per replica).
-6. **Scale down** — when demand drops, KEDA scales back toward **0**; a `preStop` drain lets
-   in-flight streams finish before the pod is terminated.
+The two dashed gateway–KEDA paths are alternative scaler transports, not concurrent requirements.
 
-### Scaler transport
+## Request lifecycle
 
-`metrics-api` remains the compatibility default. Set the operator's
-`--scaler-mode=external-push` flag, or Helm value `gateway.scalerMode=external-push`, to remove the
-poll interval from cold activation. External-push requires exactly one gateway replica: a KEDA
-stream connects to one Pod and Noctaya does not yet aggregate demand across gateway replicas. The
-operator refuses that mode when `gateway.replicas` is not `1`.
+1. **Idle:** with `spec.scaling.min: 0`, the gateway remains available while KEDA holds the backend at `0`.
+2. **Admit:** a cold request occupies one bounded queue slot. A full queue returns `429`. `keepalive` holds the request with SSE heartbeats; `reject` returns `503` with `Retry-After`.
+3. **Activate:** KEDA observes demand and scales the backend from `0` to `1`. The Pod is not Ready until scheduling, image pull, weight loading, and runtime probes complete.
+4. **Serve:** the gateway forwards the request only after the backend is Ready.
+5. **Scale out:** sustained queue depth can increase replicas up to `spec.scaling.max`.
+6. **Scale down:** after demand and the stabilization window expire, KEDA returns the backend toward `0`; `preStop` drain protects in-flight requests.
 
-Cold admission starts an activation lease that is independent of the client connection. The lease
-keeps demand active until the backend becomes ready (plus a short retry grace) or
-`activationTimeout` expires. This lets `reject` mode return `503 + Retry-After` without losing the
-activation signal. Every new gRPC stream receives the current state immediately, including when
-KEDA reconnects the stream. `/noctaya/queue` remains available for observability and rollback.
+## Scaling and failure behavior
 
-The scaler Service is ClusterIP-only and uses plaintext gRPC on port `9090`; it is not exposed by
-the public gateway Service. Restrict access with cluster NetworkPolicy where tenant isolation is
-required.
+Noctaya and KEDA are installed independently. The operator may start before KEDA, but the KEDA `ScaledObject` CRD must exist before an `LLMService` is deployed.
 
-## Observability
+`metrics-api` is the default and polls `/noctaya/queue`. `external-push` streams activation events to KEDA and removes the polling delay from the initial signal. Select it with `--scaler-mode=external-push` or `gateway.scalerMode=external-push`.
 
-vLLM and the gateway expose `/metrics` through Services with a stable `http` port and
-`serving.noctaya.io/llmservice` discovery label. Noctaya does not install or manage
-`kube-prometheus-stack` or other monitoring resources. The independent
-[`examples/observability`](https://github.com/noctaya/noctaya/tree/main/examples/observability)
-package provides an opt-in `ServiceMonitor` and Grafana dashboard.
+External-push requires exactly one gateway replica because demand is not yet aggregated across gateway Pods. The operator rejects any other replica count in this mode.
+
+Cold admission creates an activation lease independent of the client connection. Demand remains active until the backend becomes Ready, followed by a short retry grace, or until `activationTimeout` expires. If a load fails, that lease expires instead of signaling forever; a later cold request may start a new lease.
+
+The external scaler Service is cluster-internal, uses plaintext gRPC on port `9090`, and is not part of the public gateway Service. Use a NetworkPolicy when tenant isolation requires it.
 
 ## Caching
 
-Cold-start cost is dominated by fetching + loading weights, so caching is what makes scale-to-zero
-usable. Noctaya supports `HostPath` and `NodeLocalPVC` (with a pinnable `storageClassName`), plus a
-prewarm Job for Hugging Face or ModelScope weights. A `pvc://` source mounts pre-staged weights
-read-only and skips prewarming. Node-local caches are per-node today;
-`SharedPVC` (RWX) for multi-node is on the roadmap.
-Prewarm Pods inherit the runtime's node selector, tolerations, and scheduler but do not consume an
-accelerator.
-Cache PVCs and prewarm Jobs are create-once resources because their workload fields are immutable;
-changing the model or cache configuration requires explicitly replacing the affected resource.
+Caching reduces repeated download time; runtime loading time remains. Implemented strategies are `NodeLocalPVC` (default), `HostPath`, and `None`. The API reserves `SharedPVC` and `BakedImage`, but they are not implemented.
+
+An optional prewarm Job downloads Hugging Face or ModelScope weights without requesting an accelerator. A `pvc://` model source mounts pre-staged weights read-only and skips prewarming.
+Cache PVCs and prewarm Jobs are create-once because their workload fields are immutable; replace them explicitly after changing model or cache configuration.
+
+## Observability
+
+The backend and gateway expose `/metrics` through Services with a stable `http` port and the `serving.noctaya.io/llmservice` discovery label. Noctaya does not manage a monitoring stack.
+[`examples/observability`](https://github.com/noctaya/noctaya/tree/main/examples/observability) provides an optional `ServiceMonitor` and Grafana dashboard.
