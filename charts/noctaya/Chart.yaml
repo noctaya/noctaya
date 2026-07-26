@@ -4,7 +4,7 @@ description: A minimal, composable LLM serving control plane for private Kuberne
 type: application
 version: 0.4.0-alpha.1
 appVersion: "0.4.0-alpha.1"
-kubeVersion: ">=1.29.0-0"
+kubeVersion: ">=1.30.0-0"
 keywords:
   - llm
   - vllm

@@ -6,9 +6,13 @@ Verify the operator deployment:
 The operator deploys a data-plane gateway per LLMService using:
   {{ include "noctaya.gatewayImage" . }}
 
-Prerequisite for scale-to-zero (Noctaya degrades gracefully without it):
-  - KEDA (required for scale-to-zero / autoscaling):
-      https://keda.sh/docs/2.20/deploy/
+KEDA is a required, independently managed runtime integration. This chart does
+not install, upgrade, or uninstall it. Before deploying an LLMService, install
+KEDA using its official chart or another supported method:
+  https://keda.sh/docs/2.20/deploy/
+
+Verify its API:
+  kubectl get crd scaledobjects.keda.sh
 
 Prometheus and Grafana are independent, opt-in integrations. Noctaya does not
 create their resources; see examples/observability in the project repository.

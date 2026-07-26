@@ -22,7 +22,7 @@ rules:
 - apiGroups: [batch]
   resources: [jobs]
   verbs: [create, delete, get, list, patch, update, watch]
-# Optional autoscaling integration: Noctaya degrades gracefully if this CRD is absent.
+# KEDA is installed independently; Noctaya manages only each LLMService's ScaledObject.
 - apiGroups: [keda.sh]
   resources: [scaledobjects]
   verbs: [create, delete, get, list, patch, update, watch]
