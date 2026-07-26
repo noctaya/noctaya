@@ -1,198 +1,140 @@
 # Noctaya Agent Guide
 
-## Scope and Sources of Truth
+## Scope and sources of truth
 
-Noctaya is a Kubernetes orchestration and lifecycle layer for scale-to-zero LLM serving. It owns
-declarative deployment, runtime selection, model loading and caching, health, accelerator
-scheduling translation, autoscaling integration, and stable metrics surfaces.
+Noctaya owns the Kubernetes orchestration and lifecycle layer for scale-to-zero LLM serving:
+declarative workloads, runtime selection, model loading and caching, health, accelerator scheduling translation, autoscaling integration, and stable metrics.
 
-Keep changes on that boundary. Noctaya does not implement inference kernels, vendor runtime
-behavior, device plugins, schedulers, monitoring lifecycle, or a fleet-level serving platform.
-Vendor adapters must remain thin Kubernetes-layer translations.
+Do not move inference kernels, vendor runtime behavior, device plugins, schedulers, monitoring lifecycle, fleet routing, or datacenter serving into Noctaya. Vendor adapters must remain thin Kubernetes translations.
 
 The API group is `serving.noctaya.io/v1alpha1`:
 
-- `LLMService` is namespaced and describes the model, runtime selection, resources, caching,
-  scaling, and endpoint behavior.
-- `InferenceRuntime` is cluster-scoped and describes a reusable runtime image, accelerator,
-  scheduling, probes, lifecycle, and optional metric metadata. Its controller is intentionally
-  passive; the `LLMService` reconciler consumes it.
+- `LLMService` is namespaced and describes serving intent.
+- `InferenceRuntime` is cluster-scoped and describes a reusable runtime and accelerator profile.
+Its controller is passive; the `LLMService` reconciler consumes it.
 
-Sources of truth are `docs/architecture.md` for boundaries, `CONTRIBUTING.md` for the human
-workflow, the Makefile and `.github/workflows/` for commands and CI, API types and generated CRDs
-for schemas, and validation reports for hardware claims. Read the relevant source before changing
-it. Put long tutorials in `CONTRIBUTING.md` or the appropriate document under `docs/`.
+Read the relevant source before editing:
 
-## Repository Map
+- `docs/architecture.md` defines the project boundary and lifecycle.
+- `CONTRIBUTING.md` defines the human workflow.
+- API types and generated CRDs define schemas.
+- The Makefile and `.github/workflows/` define commands and CI.
+- Physical-validation reports define hardware claims.
+
+Keep tutorials in the appropriate document under `docs/`, not in this guide.
+
+## Repository map
 
 | Path | Responsibility |
 |---|---|
-| `cmd/` | Operator and per-service gateway entry points |
-| `api/v1alpha1/` | CRD Go types and Kubebuilder markers |
-| `internal/controller/` | Reconcilers and controller envtest suite |
-| `internal/backend/` | Shared builders, adapter registry, and NVIDIA/Ascend adapters |
-| `internal/gateway/` | Cold-start proxy, admission, draining, scaler, and metrics |
-| `internal/model/` | Model URI resolution (`hf://`, `modelscope://`, and `pvc://`) |
-| `config/` | Kustomize deployment and generated CRDs/RBAC |
-| `charts/noctaya/` | Manually maintained Helm chart and synchronized CRDs |
-| `examples/` | Device-specific profiles and optional observability assets |
-| `docs/{nvidia,ascend}/` | Physical-validation evidence and hardware runbooks |
-| `docs/noctaya/` | Docusaurus shell for the documentation published at `noctaya.io` |
-| `test/` | Manager and scale-to-zero E2E suites plus the CPU vLLM stub |
-| `.github/workflows/` | CI and release source of truth |
+| `cmd/` | Operator and gateway entry points |
+| `api/v1alpha1/` | CRD types and Kubebuilder markers |
+| `internal/controller/` | Reconcilers and envtest coverage |
+| `internal/backend/` | Shared builders, registry, and vendor adapters |
+| `internal/gateway/` | Admission, activation, proxying, draining, scaler, and metrics |
+| `internal/model/` | Model URI resolution |
+| `config/` and `charts/noctaya/` | Kustomize and manually maintained Helm packaging |
+| `examples/` | Device profiles and optional integrations |
+| `docs/validation/` | Shared validation requirements and physical-device reports |
+| `docs/noctaya/` | Docusaurus presentation for `noctaya.io` |
+| `test/` | Kind E2E suites and the CPU vLLM stub |
 
-There is one API group and no webhook implementation. Do not move Kubebuilder-owned files,
-convert the layout, or scaffold APIs or webhooks unless the task explicitly requires it. When
-scaffolding is required, use the matching `kubebuilder create ...` command and preserve every
-`+kubebuilder:scaffold:*` marker.
+There is one API group and no webhook. Do not move Kubebuilder-owned files or scaffold APIs or webhooks unless explicitly requested.
+When scaffolding is required, use Kubebuilder and preserve every `+kubebuilder:scaffold:*` marker.
 
-## Working Tree and Generated Files
+## Work safely
 
-Inspect `git status` before editing. Existing modifications belong to the user: preserve unrelated
-changes, avoid broad rewrites that overlap them, and never discard them to clean the worktree.
+Inspect `git status` before editing. Existing changes belong to the user: preserve unrelated work, avoid overlapping broad rewrites, and never discard changes to clean the tree. Do not commit unless the user requests it.
 
-Never hand-edit these generated artifacts:
+Never hand-edit:
 
-- `api/v1alpha1/zz_generated.deepcopy.go` — generated by `make generate`;
-- `config/crd/bases/*.yaml` — generated by `make manifests`;
-- `config/rbac/role.yaml` — generated by `make manifests`;
-- `charts/noctaya/crds/*.yaml` — synchronized by `make helm-crds`;
-- `internal/gateway/externalscaler/*.pb.go` — generated from `externalscaler.proto`; and
-- `PROJECT` — maintained by Kubebuilder CLI operations.
+- `api/v1alpha1/zz_generated.deepcopy.go`;
+- `config/crd/bases/*.yaml` or `config/rbac/role.yaml`;
+- `charts/noctaya/crds/*.yaml`;
+- `internal/gateway/externalscaler/*.pb.go`; or
+- `PROJECT`.
 
-After changing API types, validation/default markers, resource scope, or RBAC markers, run the
-first two commands below. After changing `externalscaler.proto`, run the third:
+After changing API types, validation/default markers, scope, or RBAC markers, run:
 
 ```bash
 make manifests generate
 make helm-crds
+```
+
+After changing `externalscaler.proto`, run:
+
+```bash
 go generate ./internal/gateway/externalscaler
 ```
 
-Commit source and generated output together only when the user requests a commit. Inspect all
-generated diffs and reject unrelated churn. `make deploy` and `make build-installer` can update the
-manager image in `config/manager/`; check for incidental changes afterward.
+Review generated diffs and reject unrelated churn. Helm templates are not generated from `config/`; align RBAC, manager settings, images, and CRDs across both installation paths. `make deploy` and `make build-installer` may change the manager image under `config/manager/`.
 
-Helm templates are not generated from `config/`. Align RBAC changes with
-`charts/noctaya/templates/rbac.yaml`, manager settings with both deployment definitions, and API
-changes with the chart CRDs.
+## Architecture invariants
 
-## Architecture Invariants
+One `LLMService` normally owns a backend Deployment and Service, gateway Deployment and public Service, optional cache and prewarm resources, a KEDA `ScaledObject`, and an internal scaler Service when external-push is enabled.
 
-One `LLMService` normally reconciles a backend Deployment and Service, a gateway Deployment and
-public Service, an external-push scaler Service when enabled, optional cache/prewarm resources, and
-an optional KEDA `ScaledObject`.
-
-Preserve these behaviors:
+Preserve these rules:
 
 - Reconciliation is idempotent.
-- Mutable owned resources use server-side apply with field owner `noctaya-operator` and controller
-  references.
-- Cache PVCs and prewarm Jobs contain immutable fields and are create-once; understand replacement
-  and ownership before changing them.
-- A missing KEDA CRD is supported. Optional-resource apply skips `NoMatch` errors instead of making
-  KEDA mandatory.
-- Monitoring stays outside reconciliation; optional Prometheus resources belong under
-  `examples/observability/`.
-- Owned Kubernetes resources are watched with controller-runtime instead of periodic requeues.
-- Status is updated only when changed, uses `metav1.Condition`, and sets `ObservedGeneration`.
-- Backend builders do not set Deployment replicas; KEDA owns the `0..N` replica count.
-- Gateway and backend replicas remain separate. External-push requires one gateway until demand
-  aggregation exists; metrics-api has an incomplete per-Pod demand view with multiple gateways.
-- Vendor behavior stays behind `backend.BackendAdapter`; common vLLM behavior stays in shared
-  builders.
-- Optional external CRDs remain unstructured unless a typed dependency is an explicit design
-  decision.
+- Mutable owned resources use server-side apply with field owner `noctaya-operator` and controller references.
+- Cache PVCs and prewarm Jobs are create-once because they contain immutable fields.
+- KEDA is required for scaling but installed independently. Never bundle it with the chart or import its Go SDK; its CRD must exist before an `LLMService` is deployed.
+- Monitoring remains outside reconciliation; optional resources belong in   `examples/observability/`.
+- Watch owned resources through controller-runtime instead of periodic requeues.
+- Update status only when changed, use `metav1.Condition`, and set `ObservedGeneration`.
+- Backend builders never set replicas; KEDA owns the backend `0..N` count.
+- Gateway and backend replicas remain separate. External-push requires one gateway until demand aggregation exists.
+- Vendor behavior stays behind `backend.BackendAdapter`; shared vLLM behavior stays common.
+- Keep external CRDs unstructured unless a typed dependency is an explicit design decision.
 
-When adding a backend vendor, update every applicable surface:
+When adding a vendor, add and test the adapter, register it, update the API enum, add a device-specific example, update documentation, and regenerate API artifacts. Rendering is not hardware evidence: claims must record the physical device, topology, driver and device plugin, runtime image, Noctaya version, commands, and results.
 
-1. Add the adapter package and focused rendering tests under `internal/backend/<vendor>/`.
-2. Register it in `internal/backend/registry/registry.go`.
-3. Add the vendor to the validation enum in `api/v1alpha1/inferenceruntime_types.go`.
-4. Add a device-specific runtime and service profile under `examples/<vendor>/<device>/`.
-5. Update relevant user documentation and validation claims.
-6. Regenerate manifests, deepcopy code, and Helm CRDs.
-
-Rendering tests are not hardware evidence. Support claims must name the physical device, topology,
-driver and device-plugin versions, runtime image, Noctaya version, commands, and observed results.
-
-## Change Routing
+## Route changes
 
 ### Go, APIs, and controllers
 
-- Update the closest tests and follow the package's existing `testing` or Ginkgo/Gomega style.
-- Use Kubernetes API conventions and precise Kubebuilder validation/default markers.
-- Consider backward compatibility even while the API remains `v1alpha1`.
-- Keep controllers, builders, examples, tests, generated files, and `docs/crd.md` aligned
-  with API changes.
-- `InferenceRuntime` is cluster-scoped; its type marker and generated CRD are authoritative.
-- Run `make test` and `make lint` for completed Go changes.
+Update the closest tests and follow the package's existing `testing` or Ginkgo/Gomega style. Use Kubernetes API conventions, preserve backward compatibility where practical, and keep controllers, builders, examples, tests, generated files, and `docs/crd.md` aligned. `InferenceRuntime` remains cluster-scoped. Run `make test` and `make lint`.
 
-### Gateway and scale-to-zero
+### Gateway and scaling
 
-Cover affected success, timeout, rejection, streaming, cancellation, and drain paths. If behavior
-crosses KEDA activation or scale-down, run both metrics-api and external-push scale-to-zero E2E
-modes in addition to focused tests.
+Cover affected success, timeout, rejection, streaming, cancellation, and drain paths. If behavior crosses KEDA activation or scale-down, run both metrics-api and external-push E2E modes.
 
-### Packaging, examples, and documentation
+### Packaging and documentation
 
-- Keep chart values, templates, Kustomize manifests, installation docs, and release behavior
-  aligned.
-- Keep Markdown in `docs/`, `examples/README.md`, and the root project documents as the
-  documentation source of truth. `docs/noctaya/` owns presentation and deployment, not duplicate
-  content.
-- Operator, gateway, and stub images have separate Make targets; Docker is the default and Podman
-  may be selected with `CONTAINER_TOOL=podman`.
-- Keep hardware examples independently deployable and device-specific.
-- Check documented commands, paths, versions, image names, API fields, and support claims against
-  source; link to detailed guides instead of copying tutorials into `AGENTS.md` or `README.md`.
+Keep chart values, templates, Kustomize manifests, installation docs, and release behavior aligned.
+Canonical Markdown stays in `docs/`, `examples/README.md`, and root project files; `docs/noctaya/` owns presentation, not duplicate content. Keep hardware examples independently deployable and verify every documented command, version, image, API field, and support claim.
 
 ### Releases
 
-1. Update `charts/noctaya/Chart.yaml` `version` and `appVersion`.
-2. Move accumulated changelog entries into a dated version section, retain a fresh
-   `[Unreleased]` section, and update comparison links.
-3. Update the README status/install version and version-bearing documentation without rewriting
-   historical evidence or unrelated runtime image tags.
-4. Reconcile hardware claims with their validation reports.
+1. Update the chart `version` and `appVersion`.
+2. Move changelog entries into a dated release and retain an empty `[Unreleased]` section.
+3. Update current install/status references without rewriting historical validation evidence.
+4. Reconcile hardware claims with validation reports.
 5. Validate the chart and inspect `.github/workflows/release.yml` before tagging.
 
 ## Verification
 
-Use the Go version declared by `go.mod` and keep the Dockerfiles aligned. During iteration, run
-`go test` against the closest package under `internal/backend/`, `internal/gateway/`,
-`internal/model/`, or `test/vllm-stub/`. Controller tests need envtest assets; use `make test`
-unless `KUBEBUILDER_ASSETS` is already set.
+Use the Go version in `go.mod`. Prefer the closest package test while iterating; controller tests require envtest, so use `make test` unless `KUBEBUILDER_ASSETS` is configured.
 
-| Command | Purpose and effects |
+| Command | Purpose |
 |---|---|
-| `make build` | Generates, formats, vets, and builds manager and gateway; may modify generated/formatted files |
-| `make test` | Runs generation, formatting, vet, unit and envtest coverage; writes `cover.out` and excludes E2E packages |
-| `make lint` | Runs the pinned custom golangci-lint binary |
-| `make lint-fix` | Mutates source using supported lint/format fixes; inspect every edit |
-| `make test-docs` | Installs pinned Node dependencies and builds the Docusaurus site |
-| `make test-e2e` | Creates and removes isolated Kind cluster `noctaya-test-e2e`; runs the metrics-api lifecycle |
-| `make test-e2e E2E_SCALER_MODE=external-push` | Creates the same isolated environment and runs the streaming ExternalScaler lifecycle |
+| `make build` | Generate, format, vet, and build; may modify files |
+| `make test` | Generate, format, vet, run unit/envtest coverage, and write `cover.out` |
+| `make lint` | Run the pinned linter |
+| `make lint-fix` | Apply supported fixes; inspect every edit |
+| `make test-docs` | Install pinned Node dependencies and build Docusaurus |
+| `make test-e2e` | Run the metrics-api lifecycle on an isolated Kind cluster |
+| `make test-e2e E2E_SCALER_MODE=external-push` | Run the ExternalScaler lifecycle |
 
-E2E commands interact with Kubernetes. Use only dedicated disposable Kind clusters, confirm the
-current kube-context, and never target development, staging, or production clusters. The E2E runner
-owns its named cluster, dedicated kubeconfig, KEDA installation, and cleanup; it refuses to reuse
-an existing cluster.
+E2E commands may target only the disposable Kind cluster owned by the runner. Confirm the kube-context and never target development, staging, or production.
 
-## Code and Review Style
+## Style and completion
 
-- Preserve the Apache-2.0 header on Go files.
-- Prefer focused changes and avoid unrelated refactors or generated churn.
-- Retain comments only for non-obvious ownership, lifecycle, Kubernetes, or scale-to-zero
-  decisions; do not narrate clear code.
-- Use structured controller-runtime logging with balanced key/value pairs.
-- Log messages start with a capital letter, do not end with punctuation, name the object or action,
-  and use past tense for failures, such as `"Failed to create Deployment"`.
-- Preserve `serving.noctaya.io/*` and `app.kubernetes.io/*` naming and label contracts.
-- Avoid dependencies when Kubernetes unstructured objects or the standard library fit the existing
-  approach.
-- Do not commit unless the user requests it. When asked, use a focused Conventional Commit subject
-  and DCO sign-off with `git commit -s`.
+- Preserve Apache-2.0 headers and `serving.noctaya.io/*` and `app.kubernetes.io/*` contracts.
+- Prefer focused changes; avoid unrelated refactors, dependencies, and generated churn.
+- Comment only non-obvious ownership, lifecycle, Kubernetes, or scale-to-zero decisions.
+- Use structured logging with balanced key/value pairs.
+- Log messages start with a capital letter, have no final punctuation, name the action, and use past tense for failures, for example `"Failed to create Deployment"`.
+- When a commit is requested, use a focused Conventional Commit subject and `git commit -s`.
 
-Before declaring completion, inspect `git diff`, run checks proportionate to the changed area, and
-report exactly what ran and what did not.
+Before declaring completion, inspect the diff, run proportionate checks, and report exactly what ran and what did not.
