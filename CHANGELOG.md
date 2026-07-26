@@ -185,7 +185,7 @@ a schedulable NPU node and stays open. Ascend support is therefore **experimenta
 not yet "supported." Still `v1alpha1` and not production-ready.
 
 ### Added
-- **Ascend 910B validation report + bring-up runbook** ([docs/ascend/ascend-910b-validation.md](docs/ascend/ascend-910b-validation.md))
+- **Ascend 910B validation report + bring-up runbook** ([docs/validation/ascend/910b3.md](docs/validation/ascend/910b3.md))
   capturing the verified environment (910B3 64 GB, CANN 9.0.0 / driver 26.0.rc1), the smoke test,
   the operator render dry-run, and the gateway data-plane results.
 

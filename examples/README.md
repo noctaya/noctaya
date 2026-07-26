@@ -1,26 +1,10 @@
 # Examples
 
-## Device profiles
+Each device directory contains one deployable `InferenceRuntime` and `LLMService` pair. Use these profiles as starting points; applying a profile is not hardware-validation evidence. For the full installation and scale-to-zero walkthrough, see [Getting started](../docs/getting-started.md).
 
-Each directory is an independently deployable `InferenceRuntime` and `LLMService` pair for one
-accelerator model. Apply only the profile that matches the devices advertised by your Kubernetes
-cluster. The root `examples/kustomization.yaml` is intentionally empty so that
-`kubectl apply -k examples` cannot deploy incompatible workloads across multiple accelerator
-families.
+## Choose a profile
 
-Install Noctaya, KEDA, and the device plugin for the selected accelerator before applying a
-profile. For example:
-
-```bash
-kubectl create namespace ai
-kubectl apply -k examples/ascend/310p-duo -n ai
-```
-
-`InferenceRuntime` is cluster-scoped; `LLMService` is created in the namespace selected by `-n`.
-All bundled service profiles use `NodeLocalPVC`. Ensure the cluster has a default dynamic
-StorageClass, or set `cache.storageClassName` before applying a profile.
-
-Every runtime profile selects its intended accelerator nodes:
+Install Noctaya and KEDA independently, then provide the driver and device plugin for the selected accelerator.
 
 | Profile | Device resource | Required node selector |
 |---|---|---|
@@ -30,25 +14,42 @@ Every runtime profile selects its intended accelerator nodes:
 | Atlas 300I Pro | `huawei.com/Ascend310P` | `accelerator=huawei-Ascend310P`, `serving.noctaya.io/ascend-product=atlas-300i-pro` |
 | Ascend 910B3 | `huawei.com/Ascend910` | `accelerator=huawei-Ascend910`, `serving.noctaya.io/ascend-product=ascend-910b3` |
 
-Inspect the live node labels before applying a profile:
+Inspect the live labels before applying a profile:
 
 ```bash
 kubectl get nodes \
   -L nvidia.com/gpu.product,accelerator,serving.noctaya.io/ascend-product
 ```
 
+All bundled profiles use `NodeLocalPVC`. Provide a default dynamic StorageClass or set `spec.cache.storageClassName` in the `LLMService`.
+
+## Deploy a profile
+
+```bash
+kubectl create namespace ai --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -n ai -k examples/nvidia/a10
+```
+
+`InferenceRuntime` is cluster-scoped; `LLMService` and generated workloads use the namespace passed to `kubectl`. The root `examples/kustomization.yaml` is intentionally empty, so `kubectl apply -k examples` cannot deploy incompatible profiles together.
+
 ## Change the model
 
-Each device profile contains one `serving_v1alpha1_inferenceruntime.yaml` and one
-`serving_v1alpha1_llmservice.yaml`. To serve another model on the same engine and accelerator,
-normally edit only the `LLMService` manifest:
+Normally, edit only `serving_v1alpha1_llmservice.yaml`:
 
-- give `metadata.name` a new, model-specific value;
-- set `spec.model.source.uri` to an `hf://`, `modelscope://`, or `pvc://` source;
-- update `spec.runtime.argsOverride` for model-specific engine flags; and
-- size `spec.resources`, `spec.cache`, and `spec.scaling` for the model and available hardware.
+1. Give `metadata.name` a new, model-specific value.
+2. Set `spec.model.source.uri`.
+3. Update `spec.runtime.argsOverride` for model-specific engine flags.
+4. Size `spec.resources`, `spec.cache`, and `spec.scaling` for the model and available hardware.
 
-For example, these are the relevant A10 fields for a DeepSeek-R1 distilled model:
+Supported model sources:
+
+| URI | Purpose |
+|---|---|
+| `hf://<organization>/<model>` | Download from Hugging Face |
+| `modelscope://<organization>/<model>` | Download from ModelScope |
+| `pvc://<claim>[/<subpath>]` | Mount pre-staged weights read-only; use `cache.strategy: None` |
+
+For example, the A10 profile can serve DeepSeek-R1-Distill-Qwen-7B with these service fields:
 
 ```yaml
 metadata:
@@ -73,14 +74,16 @@ spec:
     prewarm: true
 ```
 
-Apply the edited service without reapplying the runtime:
+Apply only the edited service:
 
 ```bash
 kubectl apply -n ai -f examples/nvidia/a10/serving_v1alpha1_llmservice.yaml
 ```
 
+Use a new service name when changing models because cache PVCs and prewarm Jobs are create-once.
+Change `InferenceRuntime` only when the image, accelerator integration, scheduling, probes, or lifecycle settings must change.
+
 ## Optional observability
 
-Noctaya exposes metrics but does not create Prometheus or Grafana resources. The independent
-[`observability`](https://github.com/noctaya/noctaya/tree/main/examples/observability)
-package contains an opt-in `ServiceMonitor` and dashboard.
+Noctaya does not install Prometheus or Grafana. The independent
+[`observability`](https://github.com/noctaya/noctaya/tree/main/examples/observability) package contains an optional `ServiceMonitor` and dashboard.

@@ -3,7 +3,7 @@ const sidebars = {
   docsSidebar: [
     {
       type: 'html',
-      value: '<span class="sidebar-section-label">Learn</span>',
+      value: '<span class="sidebar-section-label">Start</span>',
       defaultStyle: true,
     },
     {
@@ -13,7 +13,7 @@ const sidebars = {
     },
     {
       type: 'doc',
-      id: 'docs/started',
+      id: 'docs/getting-started',
       label: 'Getting started',
     },
     {
@@ -38,18 +38,8 @@ const sidebars = {
     },
     {
       type: 'doc',
-      id: 'docs/observability',
-      label: 'Observability',
-    },
-    {
-      type: 'doc',
       id: 'docs/no-gpu',
-      label: 'Develop without an accelerator',
-    },
-    {
-      type: 'doc',
-      id: 'docs/demo',
-      label: 'Operational walkthrough',
+      label: 'Test without an accelerator',
     },
     {
       type: 'category',
@@ -58,22 +48,22 @@ const sidebars = {
       items: [
         {
           type: 'doc',
-          id: 'docs/ascend/ascend-validation',
-          label: 'Validation guide',
+          id: 'docs/validation/requirements',
+          label: 'Requirements',
         },
         {
           type: 'doc',
-          id: 'docs/nvidia/a10-validation',
+          id: 'docs/validation/nvidia/a10',
           label: 'NVIDIA A10',
         },
         {
           type: 'doc',
-          id: 'docs/ascend/ascend-310p-validation',
+          id: 'docs/validation/ascend/310p',
           label: 'Ascend 310P',
         },
         {
           type: 'doc',
-          id: 'docs/ascend/ascend-910b-validation',
+          id: 'docs/validation/ascend/910b3',
           label: 'Ascend 910B3',
         },
       ],

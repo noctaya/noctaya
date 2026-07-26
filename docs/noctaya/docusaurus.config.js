@@ -96,8 +96,8 @@ const config = {
     announcementBar: {
       id: 'v040_alpha1_status',
       content:
-        'Noctaya v0.4.0-alpha.1 is a prerelease. Production-hardening work continues; see the <a href="/ROADMAP">roadmap and current limitations</a>.',
-      backgroundColor: '#fff0f7',
+        '<strong>v0.4.0-alpha.1</strong> · Production hardening is underway. <a href="/ROADMAP">See status and limitations →</a>',
+      backgroundColor: '#ffedf5',
       textColor: '#701a4b',
       isCloseable: true,
     },
@@ -112,8 +112,8 @@ const config = {
           label: 'Docs',
         },
         {
-          to: '/examples',
-          label: 'Examples',
+          to: '/docs/getting-started',
+          label: 'Getting started',
           position: 'left',
         },
         {
@@ -122,24 +122,20 @@ const config = {
           position: 'left',
         },
         {
-          to: '/ROADMAP',
-          label: 'Roadmap',
+          to: '/examples',
+          label: 'Examples',
           position: 'left',
         },
         {
-          to: '/CONTRIBUTING',
-          label: 'Contribute',
-          position: 'right',
-        },
-        {
-          href: 'https://github.com/noctaya/noctaya/issues/new/choose',
-          label: 'Report issue',
+          to: '/ROADMAP',
+          label: 'Roadmap',
           position: 'right',
         },
         {
           href: 'https://github.com/noctaya/noctaya',
-          label: 'GitHub',
           position: 'right',
+          className: 'header-github-link',
+          'aria-label': 'GitHub repository',
         },
       ],
     },
@@ -155,7 +151,7 @@ const config = {
         {
           title: 'Learn',
           items: [
-            {label: 'Getting started', to: '/docs/started'},
+            {label: 'Getting started', to: '/docs/getting-started'},
             {label: 'Architecture', to: '/docs/architecture'},
             {label: 'API reference', to: '/docs/crd'},
             {label: 'Examples', to: '/examples'},

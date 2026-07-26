@@ -1,88 +1,89 @@
-# Developing Noctaya without an accelerator
+# Test without an accelerator
 
-You can build, test, and exercise the operator, gateway, and scale-to-zero lifecycle on a CPU-only
-workstation. The `vllm-stub` replaces the inference process for these tests. Real accelerator-backed
-inference and hardware support claims still require validation on the physical device.
+Noctaya's controllers, gateway, scaler integration, and scale-to-zero lifecycle can run on a CPU-only workstation. The E2E suite uses a fake accelerator resource and a CPU vLLM stub; it does not validate drivers, device plugins, vendor runtimes, performance, or physical hardware support.
 
-This guide complements [`CONTRIBUTING.md`](../CONTRIBUTING.md), which covers running the control
-plane against a cluster.
+## Prerequisites
 
-## What runs without accelerator hardware
+Install:
 
-| Check | Command | What it covers |
-|---|---|---|
-| Unit + golden tests | `make test` | reconcilers (envtest), adapter manifest rendering (incl. `ascend`), cache, gateway, scaler logic |
-| Stub tests | `go test ./test/vllm-stub/...` | the fake vLLM server itself |
-| Lint | `make lint` | `golangci-lint` (run before every PR) |
-| Control-plane reconcile | `make install && make run` | operator turns an `LLMService` into its child objects (see CONTRIBUTING) |
+- the Go version declared by `go.mod`;
+- `make`;
+- Docker, or Podman;
+- Kind;
+- `kubectl`; and
+- Helm.
 
-Adapter rendering is testable without hardware, but support claims require validation on a real
-accelerator. Rendering tests live under `internal/backend/*/`.
+No existing Kubernetes cluster is required.
 
-## The `vllm-stub`
-
-`test/vllm-stub/` is a CPU-only fake of a vLLM OpenAI server. It exposes the surfaces used by the
-gateway and optional observability checks, so the gateway + KEDA scale-to-zero path can run on Kind
-without an accelerator:
-
-- **`/health`** — returns `503` until `STUB_STARTUP_DELAY` has elapsed since boot, then `200`. This
-  drives the gateway's cold-start keepalive and `activationTimeout` paths (mimics vLLM only going
-  ready once weights are loaded).
-- **`/v1/chat/completions` and `/v1/completions`** — honors `"stream": true` (SSE chunks +
-  `[DONE]`) or returns a single JSON body. Emits `STUB_TOKEN_COUNT` tokens at `STUB_TOKEN_DELAY`
-  each. A per-request **`?tokens=N`** override sets the stream length for timing-sensitive tests.
-- **`/metrics`** — Prometheus text with `vllm:num_requests_waiting`, `vllm:num_requests_running`,
-  `vllm:kv_cache_usage_perc`, all settable at runtime via **`POST /control`** (e.g.
-  `{"waiting": 5}`).
-
-### Configuration
-
-| Env | Default | Purpose |
-|---|---|---|
-| `STUB_STARTUP_DELAY` | `0s` | delay before `/health` flips to `200` (fake cold start) |
-| `STUB_TOKEN_COUNT` | `1` | tokens per streamed/JSON response |
-| `STUB_TOKEN_DELAY` | `50ms` | delay between streamed tokens |
-| `STUB_LISTEN_ADDR` | `:8000` | listen address |
-
-### Build the image
+## Run local checks
 
 ```bash
-make docker-build-stub                      # uses CONTAINER_TOOL (docker by default)
-make docker-build-stub CONTAINER_TOOL=podman
+make test
+make lint
 ```
 
-**Podman + Kind:** `kind load docker-image` reads Docker's store, so for Podman-built images load
-from an archive instead, and tell Kind to use Podman:
+`make test` covers unit, envtest, adapter-rendering, gateway, model, and stub behavior. It also regenerates and formats source, then writes `cover.out`; inspect the working tree afterward.
 
-```bash
-podman save noctaya.io/vllm-stub:e2e -o /tmp/stub.tar
-KIND_EXPERIMENTAL_PROVIDER=podman kind load image-archive /tmp/stub.tar --name <cluster>
-```
+## Run the scale-to-zero E2E suite
 
-## Full scale-to-zero loop on Kind
-
-The end-to-end `0→1→N→0` loop (idle → cold request wakes the backend → autoscale → drain back to
-zero, plus reject-mode 503) runs on Kind without an accelerator in `test/scale-to-zero/`. It backs
-each `LLMService` with the stub and advertises a fake accelerator resource through the node-status
-API, so no device plugin is required.
-
-The runner creates an isolated Kind cluster, writes a dedicated kubeconfig, installs the pinned
-KEDA release, builds and loads the local images, runs the suite, and cleans up afterward. It refuses
-to reuse an existing cluster or kubeconfig.
-
-```bash
-# Podman only:
-# export CONTAINER_TOOL=podman
-# export KIND_EXPERIMENTAL_PROVIDER=podman
-```
-
-CI and the local runner pin KEDA `2.20.1`. Run both scaler modes:
+Test the default polling scaler:
 
 ```bash
 make test-e2e
+```
+
+Test the external-push scaler:
+
+```bash
 make test-e2e E2E_SCALER_MODE=external-push
 ```
 
-The first command verifies the default metrics API polling path; the second verifies the internal
-external-push scaler Service, KEDA stream, activation, scale-out, drain, and return to zero. The
-workflow matrix runs both modes on every pull request through `.github/workflows/test-e2e.yml`.
+Each command:
+
+1. creates the disposable Kind cluster `noctaya-test-e2e`;
+2. uses a dedicated kubeconfig;
+3. installs KEDA `2.20.1`;
+4. builds and loads the operator, gateway, and stub images;
+5. runs the selected scaler-mode suite; and
+6. deletes the cluster and kubeconfig on exit.
+
+The runner refuses to reuse an existing cluster with that name or overwrite its kubeconfig.
+
+The suite verifies:
+
+- idle backend scale-to-zero;
+- cold activation and streaming completion;
+- concurrent scale-out through `0 → 1 → 2 → 0`;
+- graceful drain of an active stream;
+- fast cold-start rejection with `503`; and
+- the selected KEDA scaler transport.
+
+CI runs both scaler modes through `.github/workflows/test-e2e.yml`.
+
+## Use Podman
+
+Select Podman for both the image build and the Kind provider:
+
+```bash
+KIND_EXPERIMENTAL_PROVIDER=podman make test-e2e CONTAINER_TOOL=podman
+```
+
+Add `E2E_SCALER_MODE=external-push` to the same command to test external-push.
+
+## CPU vLLM stub
+
+`test/vllm-stub/` provides only the interfaces needed by the suite:
+
+| Endpoint | Purpose |
+|---|---|
+| `/health` | Delayed readiness for cold-start tests |
+| `/v1/chat/completions` and `/v1/completions` | JSON and streaming SSE responses |
+| `/metrics` and `/control` | Runtime-shaped metrics and test-time metric updates |
+
+Run its focused tests with:
+
+```bash
+go test ./test/vllm-stub/...
+```
+
+Physical accelerator claims must follow the [hardware validation requirements](validation/requirements.md).
