@@ -4,37 +4,88 @@ import Link from '@docusaurus/Link';
 import Layout from '@theme/Layout';
 import styles from './index.module.css';
 
-const capabilities = [
+const coldPath = [
   {
     number: '01',
-    title: 'Scale to zero by design',
-    description:
-      'Release accelerators when traffic disappears. A lightweight gateway keeps the endpoint available and signals KEDA when the next request arrives.',
+    title: 'Schedule',
+    description: 'Place the backend on a node with the requested accelerator.',
   },
   {
     number: '02',
-    title: 'Survive the cold path',
-    description:
-      'Bound admission, preserve activation demand, emit streaming heartbeats, wait for model readiness, and drain in-flight requests safely.',
+    title: 'Pull',
+    description: 'Fetch runtime layers when the selected node has no warm image.',
   },
   {
     number: '03',
-    title: 'Compose the stack you have',
-    description:
-      'Run existing vLLM images across NVIDIA and Ascend, use vendor device plugins, and opt into Volcano or observability without making them core dependencies.',
+    title: 'Load',
+    description: 'Mount the model cache, load weights, and initialize the runtime.',
+  },
+  {
+    number: '04',
+    title: 'Ready',
+    description: 'Release admitted traffic only after model-aware probes succeed.',
   },
 ];
 
-const boundaries = [
-  ['You declare', 'Model, runtime, resources, cache, scaling, endpoint'],
-  ['Noctaya owns', 'Workload lifecycle, cold activation, admission, drain'],
-  ['Your stack owns', 'Inference kernels, device plugins, schedulers, monitoring'],
+const protections = [
+  {
+    title: 'Preserved activation',
+    description:
+      'An activation lease keeps demand visible while the backend starts, even if the first client disconnects.',
+  },
+  {
+    title: 'Bounded admission',
+    description:
+      'The gateway returns a clear 429 before queued connections can become the next failure.',
+  },
+  {
+    title: 'Streaming-safe waits',
+    description:
+      'SSE heartbeats protect long cold starts, while reject mode gives clients an explicit retry path.',
+  },
+  {
+    title: 'Graceful return to zero',
+    description:
+      'Readiness gates new traffic and drain hooks protect in-flight streams during scale-down.',
+  },
+];
+
+const ownership = [
+  {
+    label: 'Application',
+    title: 'Serving intent',
+    description: 'Model, runtime selector, resources, cache, scaling, and endpoint behavior.',
+  },
+  {
+    label: 'Noctaya',
+    title: 'Model lifecycle',
+    description: 'Reconciliation, cold activation, admission, readiness, and graceful drain.',
+  },
+  {
+    label: 'Cluster',
+    title: 'Infrastructure',
+    description: 'Inference engines, device plugins, schedulers, KEDA, and monitoring.',
+  },
+];
+
+const validationTargets = [
+  'NVIDIA A10',
+  'NVIDIA A100',
+  'Atlas 300I Duo',
+  'Ascend 910B3',
 ];
 
 function ArrowIcon() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M4 10h11M11 5l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M4 10h11M11 5l5 5-5 5"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
     </svg>
   );
 }
@@ -42,8 +93,168 @@ function ArrowIcon() {
 function CheckIcon() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="m4 10 4 4 8-9" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path
+        d="m4 10 4 4 8-9"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
     </svg>
+  );
+}
+
+function LifecyclePanel() {
+  return (
+    <div className={styles.lifecyclePanel} aria-label="Noctaya scale-to-zero lifecycle">
+      <div className={styles.panelHeader}>
+        <div className={styles.windowDots} aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </div>
+        <span>llmservice / qwen-longtail</span>
+        <span className={styles.endpointBadge}>
+          <i />
+          endpoint online
+        </span>
+      </div>
+
+      <div className={styles.panelBody}>
+        <div className={styles.resourceSummary}>
+          <span>
+            <small>Phase</small>
+            <strong>ScaledToZero</strong>
+          </span>
+          <span>
+            <small>Gateway</small>
+            <strong>1 / 1 ready</strong>
+          </span>
+          <span>
+            <small>Backend</small>
+            <strong>0 / 2 active</strong>
+          </span>
+        </div>
+
+        <div className={styles.requestLine}>
+          <span>next request</span>
+          <i />
+          <strong>activation lease</strong>
+        </div>
+
+        <div className={styles.scaleJourney}>
+          <div className={styles.scaleState}>
+            <span>idle</span>
+            <strong>0</strong>
+            <small>accelerators used</small>
+          </div>
+          <div className={styles.journeyArrow}>
+            <span>demand</span>
+            <i />
+          </div>
+          <div className={`${styles.scaleState} ${styles.scaleStateActive}`}>
+            <span>serve</span>
+            <strong>1..N</strong>
+            <small>ready backends</small>
+          </div>
+          <div className={styles.journeyArrow}>
+            <span>quiet</span>
+            <i />
+          </div>
+          <div className={styles.scaleState}>
+            <span>release</span>
+            <strong>0</strong>
+            <small>accelerators used</small>
+          </div>
+        </div>
+
+        <div className={styles.signalPath}>
+          <span>
+            <i className={styles.gatewaySignal} />
+            Gateway
+            <small>admit + hold</small>
+          </span>
+          <b aria-hidden="true" />
+          <span>
+            <i className={styles.kedaSignal} />
+            KEDA
+            <small>scale backend</small>
+          </span>
+          <b aria-hidden="true" />
+          <span>
+            <i className={styles.readySignal} />
+            Model
+            <small>forward when ready</small>
+          </span>
+        </div>
+      </div>
+
+      <div className={styles.panelCommand}>
+        <span>$</span>
+        <code>kubectl get llmservice qwen-longtail -w</code>
+        <strong>0 → 1..N → 0</strong>
+      </div>
+    </div>
+  );
+}
+
+function ArchitectureMap() {
+  return (
+    <div className={styles.architectureMap} aria-label="Noctaya architecture">
+      <div className={styles.intentRow}>
+        <span>
+          <small>Namespaced intent</small>
+          LLMService
+        </span>
+        <b>+</b>
+        <span>
+          <small>Reusable profile</small>
+          InferenceRuntime
+        </span>
+      </div>
+
+      <div className={styles.verticalRoute}>
+        <i />
+        <small>reconcile</small>
+      </div>
+
+      <div className={styles.operatorNode}>
+        <span className={styles.operatorPulse} />
+        <div>
+          <strong>Noctaya operator</strong>
+          <small>Kubernetes lifecycle translation</small>
+        </div>
+      </div>
+
+      <div className={styles.resourceRoutes} aria-hidden="true">
+        <i />
+      </div>
+
+      <div className={styles.resourceGrid}>
+        <span>
+          <small>Always on</small>
+          Gateway
+        </span>
+        <span>
+          <small>Scale 0..N</small>
+          Model backend
+        </span>
+        <span>
+          <small>Optional</small>
+          Cache + prewarm
+        </span>
+        <span>
+          <small>Rendered API</small>
+          ScaledObject
+        </span>
+      </div>
+
+      <div className={styles.kedaPeer}>
+        <span>KEDA</span>
+        <small>required · installed independently</small>
+      </div>
+    </div>
   );
 }
 
@@ -59,117 +270,113 @@ function Home() {
           property="og:description"
           content="Release idle accelerators without giving up a stable, cold-start-aware inference endpoint."
         />
+        <meta name="theme-color" content="#100a1b" />
       </Head>
 
       <main className={styles.homepage}>
         <section className={styles.hero}>
-          <div className={styles.heroGlow} />
-          <div className={styles.heroGrid}>
+          <div className={styles.heroBackdrop} aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </div>
+          <div className={`${styles.shell} ${styles.heroGrid}`}>
             <div className={styles.heroCopy}>
-              <div className={styles.eyebrow}>
-                <span className={styles.pulse} />
-                Kubernetes-native · scale-to-zero
-              </div>
+              <Link className={styles.releasePill} to="/ROADMAP">
+                <span />
+                v0.4.0-alpha.1
+                <i />
+                production hardening
+                <ArrowIcon />
+              </Link>
               <h1>
-                Serve the long tail.
-                <span>Release the accelerator.</span>
+                Scale idle LLMs to zero.
+                <span>Wake them on demand.</span>
               </h1>
               <p className={styles.heroLead}>
-                Noctaya is a minimal control plane for bursty LLM workloads on private
-                Kubernetes clusters—declarative model lifecycle, cold-start-aware traffic, and
-                reusable runtime profiles without a fleet-scale platform.
+                Noctaya is a minimal Kubernetes control plane for bursty and long-tail models. It
+                keeps one stable OpenAI-compatible endpoint while releasing accelerators between
+                requests.
               </p>
               <div className={styles.heroActions}>
-                <Link className={styles.primaryAction} to="/docs/started">
+                <Link className={styles.primaryAction} to="/docs/getting-started">
                   Get started
                   <ArrowIcon />
                 </Link>
                 <Link className={styles.secondaryAction} to="/docs/architecture">
-                  Explore the architecture
+                  See how it works
                 </Link>
               </div>
               <div className={styles.heroProof}>
-                <span><CheckIcon /> OpenAI-compatible endpoint</span>
-                <span><CheckIcon /> NVIDIA and Ascend</span>
-                <span><CheckIcon /> Apache-2.0</span>
+                <span>
+                  <CheckIcon /> Kubernetes-native API
+                </span>
+                <span>
+                  <CheckIcon /> NVIDIA and Ascend
+                </span>
+                <span>
+                  <CheckIcon /> Apache-2.0
+                </span>
               </div>
             </div>
 
-            <div className={styles.terminalWrap} aria-label="Noctaya scale-to-zero lifecycle">
-              <div className={styles.terminal}>
-                <div className={styles.terminalTop}>
-                  <div className={styles.windowDots}><i /><i /><i /></div>
-                  <span>cluster / ai</span>
-                  <span className={styles.liveBadge}>live</span>
-                </div>
-                <div className={styles.terminalBody}>
-                  <p><span className={styles.prompt}>$</span> kubectl get llmservice</p>
-                  <div className={styles.tableHead}>
-                    <span>NAME</span><span>PHASE</span><span>REPLICAS</span>
-                  </div>
-                  <div className={styles.tableRow}>
-                    <span>qwen-longtail</span>
-                    <span className={styles.zero}>ScaledToZero</span>
-                    <span>0</span>
-                  </div>
-                  <div className={styles.eventLine}>
-                    <span>request admitted</span>
-                    <strong>gateway → KEDA</strong>
-                  </div>
-                  <div className={styles.scaleTrack}>
-                    <div className={styles.scaleNode}>0</div>
-                    <div className={styles.scaleLine}><span /></div>
-                    <div className={styles.scaleNodeActive}>1</div>
-                    <div className={styles.scaleLine}><span /></div>
-                    <div className={styles.scaleNode}>N</div>
-                    <div className={styles.scaleLine}><span /></div>
-                    <div className={styles.scaleNode}>0</div>
-                  </div>
-                  <div className={styles.eventLog}>
-                    <p><time>00:00</time><span>demand preserved</span></p>
-                    <p><time>00:04</time><span>backend scheduled</span></p>
-                    <p><time>00:31</time><span><i className={styles.readyDot} />model ready · streaming</span></p>
-                  </div>
-                </div>
-              </div>
-              <div className={styles.terminalCaption}>
-                <span>One stable endpoint</span>
-                <span>Accelerators only when needed</span>
-              </div>
-            </div>
+            <LifecyclePanel />
           </div>
         </section>
 
-        <section className={styles.validationBand} aria-label="Validated ecosystem">
-          <div className={styles.sectionShell}>
-            <span className={styles.bandLabel}>Validated across</span>
-            <div className={styles.bandItems}>
-              <span>NVIDIA A10</span>
-              <span>NVIDIA A100</span>
-              <span>Atlas 300I Duo</span>
-              <span>Ascend 910B3</span>
-              <span>KEDA</span>
-              <span>Volcano</span>
+        <section className={styles.validationStrip} aria-label="Physical validation targets">
+          <div className={styles.shell}>
+            <span className={styles.stripLabel}>Physical validation recorded for</span>
+            <div className={styles.validationTargets}>
+              {validationTargets.map((target) => (
+                <span key={target}>
+                  <i />
+                  {target}
+                </span>
+              ))}
             </div>
+            <Link to="/docs/validation/requirements">
+              Evidence <ArrowIcon />
+            </Link>
           </div>
         </section>
 
-        <section className={styles.capabilitySection}>
-          <div className={styles.sectionShell}>
-            <div className={styles.sectionIntro}>
-              <p className={styles.kicker}>Why Noctaya</p>
-              <h2>Small control plane. Complete cold-start lifecycle.</h2>
+        <section className={styles.coldPathSection}>
+          <div className={styles.shell}>
+            <div className={styles.sectionHeading}>
+              <div>
+                <p className={styles.kicker}>The cold path is the product</p>
+                <h2>Zero is one state. Recovery is a pipeline.</h2>
+              </div>
               <p>
-                Scaling a Deployment to zero is the easy part. Noctaya concentrates on what
-                happens when demand returns.
+                Scheduling, image pull, weight load, and readiness each have a different tail.
+                Noctaya keeps that entire path bounded, observable, and safe for the gateway.
               </p>
             </div>
-            <div className={styles.capabilityGrid}>
-              {capabilities.map((capability) => (
-                <article className={styles.capabilityCard} key={capability.number}>
-                  <span className={styles.cardNumber}>{capability.number}</span>
-                  <h3>{capability.title}</h3>
-                  <p>{capability.description}</p>
+
+            <div className={styles.coldPathRail}>
+              {coldPath.map((stage) => (
+                <article key={stage.number}>
+                  <div>
+                    <span>{stage.number}</span>
+                    <i />
+                  </div>
+                  <h3>{stage.title}</h3>
+                  <p>{stage.description}</p>
+                </article>
+              ))}
+            </div>
+
+            <div className={styles.protectionGrid}>
+              {protections.map((protection) => (
+                <article key={protection.title}>
+                  <span>
+                    <CheckIcon />
+                  </span>
+                  <div>
+                    <h3>{protection.title}</h3>
+                    <p>{protection.description}</p>
+                  </div>
                 </article>
               ))}
             </div>
@@ -177,96 +384,143 @@ function Home() {
         </section>
 
         <section className={styles.architectureSection}>
-          <div className={`${styles.sectionShell} ${styles.architectureGrid}`}>
+          <div className={`${styles.shell} ${styles.architectureGrid}`}>
             <div className={styles.architectureCopy}>
-              <p className={styles.kicker}>Composable by boundary</p>
+              <p className={styles.kicker}>Small by design</p>
               <h2>Use Kubernetes as the contract.</h2>
               <p>
-                Application owners declare serving intent. Cluster administrators publish
-                reusable runtime profiles. Noctaya translates both into the workloads and
-                lifecycle resources your cluster already understands.
+                Noctaya translates portable serving intent into the workloads and lifecycle
+                resources your cluster already understands. It does not replace your inference
+                engine, device plugin, scheduler, or monitoring stack.
               </p>
-              <div className={styles.boundaryList}>
-                {boundaries.map(([title, description]) => (
-                  <div key={title}>
-                    <strong>{title}</strong>
-                    <span>{description}</span>
-                  </div>
+
+              <div className={styles.ownershipList}>
+                {ownership.map((item) => (
+                  <article key={item.label}>
+                    <span>{item.label}</span>
+                    <div>
+                      <strong>{item.title}</strong>
+                      <small>{item.description}</small>
+                    </div>
+                  </article>
                 ))}
               </div>
+
               <Link className={styles.textLink} to="/docs/architecture">
                 Read the architecture guide <ArrowIcon />
               </Link>
             </div>
-            <div className={styles.flowCard}>
-              <div className={styles.flowTop}>
-                <span>LLMService</span>
-                <b>+</b>
-                <span>InferenceRuntime</span>
-              </div>
-              <div className={styles.flowConnector}><i /></div>
-              <div className={styles.flowCore}>
-                <div><strong>Noctaya</strong><span>reconcile · activate · drain</span></div>
-              </div>
-              <div className={styles.flowConnector}><i /></div>
-              <div className={styles.flowOutput}>
-                <span>Gateway</span>
-                <span>Backend 0..N</span>
-                <span>Cache</span>
-                <span>KEDA</span>
-              </div>
-            </div>
+
+            <ArchitectureMap />
           </div>
         </section>
 
-        <section className={styles.kthenaSection} id="noctaya-and-kthena">
-          <div className={styles.sectionShell}>
-            <div className={styles.policyHeader}>
-              <p className={styles.kicker}>One cluster, two serving policies</p>
-              <h2>Keep the hot path hot. Let the long tail sleep.</h2>
+        <section className={styles.compositionSection} id="noctaya-and-kthena">
+          <div className={`${styles.shell} ${styles.compositionGrid}`}>
+            <div>
+              <p className={styles.kicker}>Composable, not all-encompassing</p>
+              <h2>Fit Noctaya beside the stack you already operate.</h2>
+              <p className={styles.compositionLead}>
+                Components keep clear ownership. KEDA scales. Runtime images infer. Device plugins
+                expose accelerators. Schedulers place workloads. Noctaya coordinates the per-model
+                lifecycle.
+              </p>
+              <div className={styles.ecosystemGrid}>
+                <article>
+                  <span>Required peer</span>
+                  <strong>KEDA</strong>
+                  <small>Installed and managed independently</small>
+                </article>
+                <article>
+                  <span>Runtime</span>
+                  <strong>vLLM + vendor plugins</strong>
+                  <small>Existing inference images stay in place</small>
+                </article>
+                <article>
+                  <span>Cluster-owned</span>
+                  <strong>Device plugins + schedulers</strong>
+                  <small>Including optional Volcano placement</small>
+                </article>
+                <article>
+                  <span>On demand</span>
+                  <strong>Prometheus + Grafana</strong>
+                  <small>Observability remains outside reconciliation</small>
+                </article>
+              </div>
             </div>
-            <div className={styles.policyGrid}>
-              <article>
-                <span className={styles.policyTag}>High traffic</span>
-                <h3>Kthena</h3>
-                <p>
-                  Fleet routing, cache-aware scheduling, disaggregation, and continuously ready
-                  models.
-                </p>
-                <div className={styles.hotLine}><i /><span>ready</span></div>
-              </article>
-              <div className={styles.policyPlus}>+</div>
-              <article>
-                <span className={styles.policyTag}>Long tail</span>
-                <h3>Noctaya</h3>
-                <p>
-                  A small declarative control plane for occasional models that should release
-                  their accelerators.
-                </p>
-                <div className={styles.coldLine}><i /><span>0 → 1 → 0</span></div>
-              </article>
+
+            <aside className={styles.coexistCard}>
+              <div className={styles.coexistHeader}>
+                <span>One cluster</span>
+                <strong>Different serving policies</strong>
+              </div>
+              <div className={styles.policyCard}>
+                <div>
+                  <span className={styles.hotDot} />
+                  <small>latency-sensitive models</small>
+                </div>
+                <strong>Keep continuously ready</strong>
+                <p>Let a fleet-serving platform own the hot path.</p>
+                <i className={styles.hotTrack} />
+              </div>
+              <div className={styles.policyDivider}>
+                <span>separate workloads · shared cluster</span>
+              </div>
+              <div className={styles.policyCard}>
+                <div>
+                  <span className={styles.coldDot} />
+                  <small>bursty or long-tail models</small>
+                </div>
+                <strong>Release between requests</strong>
+                <p>Let Noctaya own a distinct endpoint and backend.</p>
+                <i className={styles.coldTrack} />
+              </div>
+              <p className={styles.coexistNote}>
+                Kthena is one validated coexistence example; the boundary is platform-neutral.
+              </p>
+            </aside>
+          </div>
+        </section>
+
+        <section className={styles.evidenceSection}>
+          <div className={`${styles.shell} ${styles.evidenceCard}`}>
+            <div>
+              <p className={styles.kicker}>Evidence before claims</p>
+              <h2>Validation tied to recorded stacks.</h2>
+              <p>
+                Hardware reports name the device, topology, software versions, commands, and
+                observed lifecycle. Rendering tests never stand in for a physical result.
+              </p>
             </div>
-            <Link className={styles.textLink} to="/docs/demo">
-              See the operational walkthrough <ArrowIcon />
-            </Link>
+            <div className={styles.evidenceLinks}>
+              <Link to="/docs/validation/nvidia/a10">
+                NVIDIA A10 report <ArrowIcon />
+              </Link>
+              <Link to="/docs/validation/ascend/310p">
+                Ascend 310P report <ArrowIcon />
+              </Link>
+              <Link to="/docs/validation/ascend/910b3">
+                Ascend 910B3 report <ArrowIcon />
+              </Link>
+            </div>
           </div>
         </section>
 
         <section className={styles.ctaSection}>
-          <div className={styles.ctaCard}>
+          <div className={`${styles.shell} ${styles.ctaCard}`}>
             <div>
-              <p className={styles.kicker}>Try Noctaya</p>
-              <h2>Start with one model and one runtime.</h2>
-              <p>Install the chart, select a hardware profile, and watch the backend wake from zero.</p>
+              <p className={styles.kicker}>Start with one model</p>
+              <h2>Build the complete 0 → 1 → N → 0 lifecycle.</h2>
+              <p>
+                Install Noctaya and KEDA independently, select a hardware profile, and follow the
+                backend from idle through inference and back to zero.
+              </p>
             </div>
             <div className={styles.ctaActions}>
-              <Link className={styles.primaryAction} to="/docs/started">
-                Open the Quick Start <ArrowIcon />
+              <Link className={styles.primaryAction} to="/docs/getting-started">
+                Open Getting Started <ArrowIcon />
               </Link>
-              <Link
-                className={styles.secondaryAction}
-                to="/CONTRIBUTING"
-              >
+              <Link className={styles.secondaryAction} to="/CONTRIBUTING">
                 Contribute
               </Link>
             </div>
