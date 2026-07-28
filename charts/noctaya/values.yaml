@@ -17,7 +17,7 @@ operator:
       memory: 128Mi
 
 gateway:
-  # One replica is required until demand aggregation is available.
+  # Multiple replicas use a per-LLMService demand aggregator for correct scaling.
   replicas: 1
 
 serviceAccount:

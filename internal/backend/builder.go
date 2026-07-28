@@ -34,6 +34,8 @@ const (
 	nameLabel       = "app.kubernetes.io/name"
 	llmServiceLabel = "serving.noctaya.io/llmservice"
 	runtimeLabel    = "serving.noctaya.io/runtime"
+	appsAPIVersion  = "apps/v1"
+	deploymentKind  = "Deployment"
 
 	volcanoQueueAnnotation = "scheduling.volcano.sh/queue-name"
 )
@@ -74,7 +76,7 @@ func BuildDeployment(a BackendAdapter, svc *servingv1alpha1.LLMService, rt *serv
 	// backend replica count (0..N, including scale-to-zero). On first create the API
 	// server defaults it to 1 until KEDA takes over.
 	dep := &appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
+		TypeMeta: metav1.TypeMeta{APIVersion: appsAPIVersion, Kind: deploymentKind},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      svc.Name,
 			Namespace: svc.Namespace,

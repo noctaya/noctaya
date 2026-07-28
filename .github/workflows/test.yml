@@ -44,9 +44,16 @@ jobs:
           helm template noctaya charts/noctaya --namespace noctaya-system \
             --set serviceAccount.create=false \
             --set operator.leaderElect=true >/dev/null
+          helm template noctaya charts/noctaya --namespace noctaya-system \
+            --set gateway.replicas=2 >/dev/null
           if helm template noctaya charts/noctaya --namespace noctaya-system \
-            --set gateway.replicas=2 >/dev/null 2>&1; then
-            echo "Expected gateway.replicas=2 to fail validation." >&2
+            --set gateway.replicas=0 >/dev/null 2>&1; then
+            echo "Expected gateway.replicas=0 to fail validation." >&2
+            exit 1
+          fi
+          if helm template noctaya charts/noctaya --namespace noctaya-system \
+            --set gateway.replicas=2147483648 >/dev/null 2>&1; then
+            echo "Expected an out-of-range gateway replica count to fail validation." >&2
             exit 1
           fi
           if helm template noctaya charts/noctaya --namespace noctaya-system \

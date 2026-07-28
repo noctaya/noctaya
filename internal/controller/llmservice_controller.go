@@ -56,8 +56,7 @@ type LLMServiceReconciler struct {
 	Backends *backend.Registry
 	// GatewayImage is the data-plane proxy image the operator deploys per LLMService.
 	GatewayImage string
-	// GatewayReplicas is the per-LLMService gateway replica count (default 1; see
-	// BuildGatewayDeployment for the current single-replica constraint).
+	// GatewayReplicas is the per-LLMService gateway replica count.
 	GatewayReplicas int32
 }
 
@@ -124,8 +123,23 @@ func (r *LLMServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if err := r.apply(ctx, &svc, backend.BuildGatewayService(&svc)); err != nil {
 		return r.fail(ctx, &svc, "ApplyGatewayService", err)
 	}
-	if err := r.apply(ctx, &svc, backend.BuildGatewayScalerService(&svc)); err != nil {
+	scalerDeployment := backend.BuildGatewayScalerDeployment(&svc, r.GatewayImage, r.GatewayReplicas)
+	if scalerDeployment != nil {
+		if err := r.apply(ctx, &svc, scalerDeployment); err != nil {
+			return r.fail(ctx, &svc, "ApplyGatewayScaler", err)
+		}
+	}
+	if err := r.apply(ctx, &svc, backend.BuildGatewayScalerService(&svc, r.GatewayReplicas)); err != nil {
 		return r.fail(ctx, &svc, "ApplyGatewayScalerService", err)
+	}
+	if scalerDeployment == nil {
+		obsolete := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{
+			Name:      backend.GatewayScalerServiceName(&svc),
+			Namespace: svc.Namespace,
+		}}
+		if err := r.deleteOwned(ctx, &svc, obsolete); err != nil {
+			return r.fail(ctx, &svc, "DeleteGatewayScaler", err)
+		}
 	}
 
 	pvc, err := backend.BuildCachePVC(&svc)
@@ -228,6 +242,20 @@ func (r *LLMServiceReconciler) ensureCreated(ctx context.Context, owner *serving
 		return err
 	}
 	return nil
+}
+
+func (r *LLMServiceReconciler) deleteOwned(
+	ctx context.Context,
+	owner *servingv1alpha1.LLMService,
+	obj client.Object,
+) error {
+	if err := r.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	if !metav1.IsControlledBy(obj, owner) {
+		return nil
+	}
+	return client.IgnoreNotFound(r.Delete(ctx, obj))
 }
 
 func (r *LLMServiceReconciler) updateStatus(ctx context.Context, svc *servingv1alpha1.LLMService, runtimeName string, dep *appsv1.Deployment) (ctrl.Result, error) {

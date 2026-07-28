@@ -83,7 +83,7 @@ func main() {
 	flag.StringVar(&gatewayImage, "gateway-image", "ghcr.io/noctaya/noctaya-gateway:latest",
 		"Container image for the per-LLMService data-plane gateway.")
 	flag.IntVar(&gatewayReplicas, "gateway-replicas", 1,
-		"Replicas for each LLMService's data-plane gateway. Must be 1 until demand aggregation is available.")
+		"Replicas for each LLMService's data-plane gateway.")
 	opts := zap.Options{
 		Development: true,
 	}

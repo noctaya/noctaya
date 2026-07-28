@@ -1,8 +1,9 @@
 {{- if hasKey .Values.gateway "scalerMode" -}}
 {{- fail "gateway.scalerMode has been removed; Noctaya always uses KEDA External Push" -}}
 {{- end -}}
-{{- if ne (int .Values.gateway.replicas) 1 -}}
-{{- fail "gateway.replicas must be 1 until demand aggregation is available" -}}
+{{- $gatewayReplicas := int .Values.gateway.replicas -}}
+{{- if or (lt $gatewayReplicas 1) (gt $gatewayReplicas 2147483647) -}}
+{{- fail "gateway.replicas must be between 1 and 2147483647" -}}
 {{- end -}}
 apiVersion: apps/v1
 kind: Deployment

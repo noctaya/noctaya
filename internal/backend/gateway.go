@@ -29,11 +29,12 @@ import (
 )
 
 const (
-	gatewayPort       = 8080
-	gatewayScalerPort = 9090
-	// One replica gives the scaler a complete demand view until aggregation is implemented.
+	gatewayPort            = 8080
+	gatewayScalerPort      = 9090
+	gatewayAggregatorPort  = 9091
 	defaultGatewayReplicas = 1
 	gatewayLabel           = "serving.noctaya.io/gateway"
+	scalerLabel            = "serving.noctaya.io/scaler"
 	backendSvcSuffix       = "-backend"
 	gatewayScalerSvcSuffix = "-scaler"
 	portNameHTTP           = "http"
@@ -42,8 +43,11 @@ const (
 )
 
 func ValidateGatewayReplicas(replicas int) error {
-	if replicas != defaultGatewayReplicas {
-		return fmt.Errorf("gateway replicas must be %d until demand aggregation is available", defaultGatewayReplicas)
+	if replicas < 1 {
+		return fmt.Errorf("gateway replicas must be at least 1")
+	}
+	if int64(replicas) > int64(1<<31-1) {
+		return fmt.Errorf("gateway replicas must fit in a Kubernetes int32 field")
 	}
 	return nil
 }
@@ -62,11 +66,29 @@ func GatewayScalerAddress(svc *servingv1alpha1.LLMService) string {
 	return fmt.Sprintf("%s.%s.svc:%d", GatewayScalerServiceName(svc), svc.Namespace, gatewayScalerPort)
 }
 
+func GatewayDemandReportURL(svc *servingv1alpha1.LLMService) string {
+	return fmt.Sprintf(
+		"http://%s.%s.svc:%d%s",
+		GatewayScalerServiceName(svc),
+		svc.Namespace,
+		gatewayAggregatorPort,
+		gateway.DemandReportPath,
+	)
+}
+
 func gatewaySelectorLabels(svc *servingv1alpha1.LLMService) map[string]string {
 	return map[string]string{
 		nameLabel:      svc.Name + "-gateway",
 		managedByLabel: managedByValue,
 		gatewayLabel:   svc.Name,
+	}
+}
+
+func scalerSelectorLabels(svc *servingv1alpha1.LLMService) map[string]string {
+	return map[string]string{
+		nameLabel:      svc.Name + "-scaler",
+		managedByLabel: managedByValue,
+		scalerLabel:    svc.Name,
 	}
 }
 
@@ -110,19 +132,30 @@ func BuildGatewayService(svc *servingv1alpha1.LLMService) *corev1.Service {
 	}
 }
 
-func BuildGatewayScalerService(svc *servingv1alpha1.LLMService) *corev1.Service {
+func BuildGatewayScalerService(svc *servingv1alpha1.LLMService, replicas int32) *corev1.Service {
+	selector := gatewaySelectorLabels(svc)
+	ports := []corev1.ServicePort{{
+		Name:       portNameGRPC,
+		Port:       gatewayScalerPort,
+		TargetPort: intstr.FromInt(gatewayScalerPort),
+		Protocol:   corev1.ProtocolTCP,
+	}}
+	if replicas > 1 {
+		selector = scalerSelectorLabels(svc)
+		ports = append(ports, corev1.ServicePort{
+			Name:       portNameHTTP,
+			Port:       gatewayAggregatorPort,
+			TargetPort: intstr.FromInt(gatewayAggregatorPort),
+			Protocol:   corev1.ProtocolTCP,
+		})
+	}
 	return &corev1.Service{
 		TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: serviceKind},
 		ObjectMeta: metav1.ObjectMeta{Name: GatewayScalerServiceName(svc), Namespace: svc.Namespace, Labels: gatewayServiceLabels(svc)},
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
-			Selector: gatewaySelectorLabels(svc),
-			Ports: []corev1.ServicePort{{
-				Name:       portNameGRPC,
-				Port:       gatewayScalerPort,
-				TargetPort: intstr.FromInt(gatewayScalerPort),
-				Protocol:   corev1.ProtocolTCP,
-			}},
+			Selector: selector,
+			Ports:    ports,
 		},
 	}
 }
@@ -140,11 +173,28 @@ func BuildGatewayDeployment(svc *servingv1alpha1.LLMService, image string, repli
 	env := []corev1.EnvVar{
 		{Name: gateway.EnvBackendURL, Value: backendURL},
 		{Name: gateway.EnvListenAddr, Value: fmt.Sprintf(":%d", gatewayPort)},
-		{Name: gateway.EnvScalerListenAddr, Value: fmt.Sprintf(":%d", gatewayScalerPort)},
 	}
-	ports := []corev1.ContainerPort{
-		{Name: portNameHTTP, ContainerPort: gatewayPort, Protocol: corev1.ProtocolTCP},
-		{Name: portNameGRPC, ContainerPort: gatewayScalerPort, Protocol: corev1.ProtocolTCP},
+	ports := []corev1.ContainerPort{{
+		Name: portNameHTTP, ContainerPort: gatewayPort, Protocol: corev1.ProtocolTCP,
+	}}
+	if replicas == 1 {
+		env = append(env, corev1.EnvVar{
+			Name: gateway.EnvScalerListenAddr, Value: fmt.Sprintf(":%d", gatewayScalerPort),
+		})
+		ports = append(ports, corev1.ContainerPort{
+			Name: portNameGRPC, ContainerPort: gatewayScalerPort, Protocol: corev1.ProtocolTCP,
+		})
+	} else {
+		env = append(env,
+			corev1.EnvVar{Name: gateway.EnvDemandAggregator, Value: GatewayDemandReportURL(svc)},
+			corev1.EnvVar{
+				Name: gateway.EnvGatewayID,
+				ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{
+					APIVersion: "v1",
+					FieldPath:  "metadata.uid",
+				}},
+			},
+		)
 	}
 	if at := svc.Spec.Scaling.ActivationTimeout.Duration; at > 0 {
 		env = append(env, corev1.EnvVar{Name: gateway.EnvActivationTimeout, Value: at.String()})
@@ -175,7 +225,7 @@ func BuildGatewayDeployment(svc *servingv1alpha1.LLMService, image string, repli
 	applyImagePullSecrets(&pod, svc)
 
 	return &appsv1.Deployment{
-		TypeMeta:   metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
+		TypeMeta:   metav1.TypeMeta{APIVersion: appsAPIVersion, Kind: deploymentKind},
 		ObjectMeta: metav1.ObjectMeta{Name: svc.Name + "-gateway", Namespace: svc.Namespace, Labels: labels},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
@@ -186,4 +236,51 @@ func BuildGatewayDeployment(svc *servingv1alpha1.LLMService, image string, repli
 			},
 		},
 	}, nil
+}
+
+func BuildGatewayScalerDeployment(
+	svc *servingv1alpha1.LLMService,
+	image string,
+	gatewayReplicas int32,
+) *appsv1.Deployment {
+	if gatewayReplicas <= 1 {
+		return nil
+	}
+	labels := scalerSelectorLabels(svc)
+	replicas := int32(1)
+	terminationGracePeriodSeconds := int64(30)
+	probe := &corev1.Probe{ProbeHandler: corev1.ProbeHandler{
+		HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromInt(gatewayAggregatorPort)},
+	}}
+	pod := corev1.PodSpec{
+		TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
+		Containers: []corev1.Container{{
+			Name:  "scaler",
+			Image: image,
+			Args:  []string{"--mode=aggregator"},
+			Env: []corev1.EnvVar{
+				{Name: gateway.EnvAggregatorAddr, Value: fmt.Sprintf(":%d", gatewayAggregatorPort)},
+				{Name: gateway.EnvScalerListenAddr, Value: fmt.Sprintf(":%d", gatewayScalerPort)},
+			},
+			Ports: []corev1.ContainerPort{
+				{Name: portNameGRPC, ContainerPort: gatewayScalerPort, Protocol: corev1.ProtocolTCP},
+				{Name: portNameHTTP, ContainerPort: gatewayAggregatorPort, Protocol: corev1.ProtocolTCP},
+			},
+			ReadinessProbe: probe,
+			LivenessProbe:  probe.DeepCopy(),
+		}},
+	}
+	applyImagePullSecrets(&pod, svc)
+	return &appsv1.Deployment{
+		TypeMeta:   metav1.TypeMeta{APIVersion: appsAPIVersion, Kind: deploymentKind},
+		ObjectMeta: metav1.ObjectMeta{Name: GatewayScalerServiceName(svc), Namespace: svc.Namespace, Labels: labels},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{MatchLabels: labels},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				Spec:       pod,
+			},
+		},
+	}
 }

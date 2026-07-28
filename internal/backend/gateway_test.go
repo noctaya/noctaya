@@ -17,6 +17,7 @@ limitations under the License.
 package backend_test
 
 import (
+	"strconv"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -40,15 +41,24 @@ func TestGatewayReplicasDefaultAndValidation(t *testing.T) {
 	g.Expect(*dep.Spec.Replicas).To(Equal(int32(1)))
 
 	g.Expect(backend.ValidateGatewayReplicas(1)).To(Succeed())
-	for _, replicas := range []int{-1, 0, 2} {
+	g.Expect(backend.ValidateGatewayReplicas(2)).To(Succeed())
+	for _, replicas := range []int{-1, 0} {
 		g.Expect(backend.ValidateGatewayReplicas(replicas)).To(MatchError(
-			"gateway replicas must be 1 until demand aggregation is available",
+			"gateway replicas must be at least 1",
 		))
 	}
-	for _, replicas := range []int32{-1, 2} {
-		_, err := backend.BuildGatewayDeployment(gatewaySvc(), "img", replicas)
-		g.Expect(err).To(MatchError("gateway replicas must be 1 until demand aggregation is available"))
+	if strconv.IntSize == 64 {
+		g.Expect(backend.ValidateGatewayReplicas(1 << 31)).To(MatchError(
+			"gateway replicas must fit in a Kubernetes int32 field",
+		))
 	}
+	for _, replicas := range []int32{-1} {
+		_, err := backend.BuildGatewayDeployment(gatewaySvc(), "img", replicas)
+		g.Expect(err).To(MatchError("gateway replicas must be at least 1"))
+	}
+	dep, err = backend.BuildGatewayDeployment(gatewaySvc(), "img", 2)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(*dep.Spec.Replicas).To(Equal(int32(2)))
 }
 
 func TestGatewayCarriesImagePullSecrets(t *testing.T) {
@@ -58,6 +68,8 @@ func TestGatewayCarriesImagePullSecrets(t *testing.T) {
 	dep, err := backend.BuildGatewayDeployment(svc, "img", 1)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(dep.Spec.Template.Spec.ImagePullSecrets).To(ContainElement(corev1.LocalObjectReference{Name: "regcred"}))
+	scaler := backend.BuildGatewayScalerDeployment(svc, "img", 2)
+	g.Expect(scaler.Spec.Template.Spec.ImagePullSecrets).To(ContainElement(corev1.LocalObjectReference{Name: "regcred"}))
 }
 
 func TestGatewayPointsAtBackendService(t *testing.T) {
@@ -74,7 +86,7 @@ func TestGatewayPointsAtBackendService(t *testing.T) {
 	g.Expect(backendURL).To(Equal("http://qwen3-8b-backend.ai.svc:80"))
 }
 
-func TestGatewayExposesInternalScaler(t *testing.T) {
+func TestSingleGatewayExposesCoLocatedScaler(t *testing.T) {
 	g := NewWithT(t)
 	svc := gatewaySvc()
 	dep, err := backend.BuildGatewayDeployment(svc, "img", 1)
@@ -88,13 +100,50 @@ func TestGatewayExposesInternalScaler(t *testing.T) {
 		Name: "grpc", ContainerPort: 9090, Protocol: corev1.ProtocolTCP,
 	}))
 
-	service := backend.BuildGatewayScalerService(svc)
+	service := backend.BuildGatewayScalerService(svc, 1)
 	g.Expect(service.Name).To(Equal("qwen3-8b-scaler"))
 	g.Expect(service.Spec.Type).To(Equal(corev1.ServiceTypeClusterIP))
 	g.Expect(service.Spec.Ports).To(HaveLen(1))
 	g.Expect(service.Spec.Ports[0].Name).To(Equal("grpc"))
 	g.Expect(service.Spec.Ports[0].Port).To(Equal(int32(9090)))
+	g.Expect(service.Spec.Selector).To(HaveKeyWithValue("serving.noctaya.io/gateway", svc.Name))
+	g.Expect(backend.BuildGatewayScalerDeployment(svc, "img", 1)).To(BeNil())
 	g.Expect(dep.Spec.Template.Spec.TerminationGracePeriodSeconds).To(HaveValue(Equal(int64(30))))
+}
+
+func TestMultipleGatewaysPublishToAggregateScaler(t *testing.T) {
+	g := NewWithT(t)
+	svc := gatewaySvc()
+	dep, err := backend.BuildGatewayDeployment(svc, "img", 2)
+	g.Expect(err).NotTo(HaveOccurred())
+	container := dep.Spec.Template.Spec.Containers[0]
+	g.Expect(container.Env).NotTo(ContainElement(HaveField("Name", "NOCTAYA_SCALER_LISTEN_ADDR")))
+	g.Expect(container.Ports).NotTo(ContainElement(HaveField("Name", "grpc")))
+	g.Expect(container.Env).To(ContainElement(corev1.EnvVar{
+		Name:  "NOCTAYA_DEMAND_AGGREGATOR_URL",
+		Value: "http://qwen3-8b-scaler.ai.svc:9091/v1/demand",
+	}))
+	g.Expect(container.Env).To(ContainElement(And(
+		HaveField("Name", "NOCTAYA_GATEWAY_ID"),
+		HaveField("ValueFrom.FieldRef.FieldPath", "metadata.uid"),
+	)))
+
+	scaler := backend.BuildGatewayScalerDeployment(svc, "img", 2)
+	g.Expect(scaler).NotTo(BeNil())
+	g.Expect(scaler.Spec.Replicas).To(HaveValue(Equal(int32(1))))
+	g.Expect(scaler.Spec.Template.Labels).To(HaveKeyWithValue("serving.noctaya.io/scaler", svc.Name))
+	scalerContainer := scaler.Spec.Template.Spec.Containers[0]
+	g.Expect(scalerContainer.Args).To(Equal([]string{"--mode=aggregator"}))
+	g.Expect(scalerContainer.Ports).To(ConsistOf(
+		corev1.ContainerPort{Name: "grpc", ContainerPort: 9090, Protocol: corev1.ProtocolTCP},
+		corev1.ContainerPort{Name: "http", ContainerPort: 9091, Protocol: corev1.ProtocolTCP},
+	))
+
+	service := backend.BuildGatewayScalerService(svc, 2)
+	g.Expect(service.Spec.Selector).To(HaveKeyWithValue("serving.noctaya.io/scaler", svc.Name))
+	g.Expect(service.Spec.Ports).To(HaveLen(2))
+	g.Expect(service.Spec.Ports).To(ContainElement(HaveField("Name", "grpc")))
+	g.Expect(service.Spec.Ports).To(ContainElement(HaveField("Name", "http")))
 }
 
 func TestServicesExposeMetricsDiscoveryContract(t *testing.T) {
@@ -116,6 +165,11 @@ func TestServicesExposeMetricsDiscoveryContract(t *testing.T) {
 		g.Expect(service.Spec.Ports).To(HaveLen(1))
 		g.Expect(service.Spec.Ports[0].Name).To(Equal("http"))
 	}
+
+	scalerService := backend.BuildGatewayScalerService(svc, 2)
+	g.Expect(scalerService.Labels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "noctaya"))
+	g.Expect(scalerService.Labels).To(HaveKeyWithValue("serving.noctaya.io/llmservice", svc.Name))
+	g.Expect(scalerService.Spec.Ports).To(ContainElement(HaveField("Name", "http")))
 }
 
 type serviceMonitorFixture struct {

@@ -216,6 +216,41 @@ var _ = Describe("LLMService Controller", func() {
 			Expect(scalerService.Spec.Ports[0].Name).To(Equal("grpc"))
 		})
 
+		It("aggregates demand for multiple gateway replicas", func() {
+			r := reconciler()
+			r.GatewayReplicas = 2
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
+			Expect(err).NotTo(HaveOccurred())
+
+			gatewayDeployment := &appsv1.Deployment{}
+			gatewayKey := types.NamespacedName{Name: svcName + "-gateway", Namespace: namespace}
+			Expect(k8sClient.Get(ctx, gatewayKey, gatewayDeployment)).To(Succeed())
+			Expect(gatewayDeployment.Spec.Replicas).To(HaveValue(Equal(int32(2))))
+			container := gatewayDeployment.Spec.Template.Spec.Containers[0]
+			Expect(container.Env).To(ContainElement(corev1.EnvVar{
+				Name:  "NOCTAYA_DEMAND_AGGREGATOR_URL",
+				Value: "http://qwen3-8b-scaler.default.svc:9091/v1/demand",
+			}))
+
+			scalerKey := types.NamespacedName{Name: svcName + "-scaler", Namespace: namespace}
+			scalerDeployment := &appsv1.Deployment{}
+			Expect(k8sClient.Get(ctx, scalerKey, scalerDeployment)).To(Succeed())
+			Expect(scalerDeployment.Spec.Replicas).To(HaveValue(Equal(int32(1))))
+			Expect(scalerDeployment.Spec.Template.Spec.Containers[0].Args).To(Equal([]string{"--mode=aggregator"}))
+
+			scalerService := &corev1.Service{}
+			Expect(k8sClient.Get(ctx, scalerKey, scalerService)).To(Succeed())
+			Expect(scalerService.Spec.Selector).To(HaveKeyWithValue("serving.noctaya.io/scaler", svcName))
+			Expect(scalerService.Spec.Ports).To(HaveLen(2))
+
+			r.GatewayReplicas = 1
+			_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Get(ctx, scalerKey, &appsv1.Deployment{})).To(Satisfy(apierrors.IsNotFound))
+			Expect(k8sClient.Get(ctx, scalerKey, scalerService)).To(Succeed())
+			Expect(scalerService.Spec.Selector).To(HaveKeyWithValue("serving.noctaya.io/gateway", svcName))
+		})
+
 		It("reports missing KEDA without creating a model backend", func() {
 			r := reconciler()
 			r.Client = &applyErrorClient{
