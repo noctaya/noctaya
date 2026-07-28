@@ -21,4 +21,4 @@ patches:
           - --health-probe-bind-address=:8081
           - --leader-elect
           - --gateway-image=noctaya.io/noctaya-gateway:e2e
-          - --gateway-replicas=1
+          - --gateway-replicas=2

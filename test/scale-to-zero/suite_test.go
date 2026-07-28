@@ -30,6 +30,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -134,6 +135,17 @@ func backendPods(name string) (int, error) {
 	return len(strings.Fields(output)), nil
 }
 
+func gatewayPodNames(name string) ([]string, error) {
+	output, err := kubectl("get", "pods", "-n", namespace,
+		"-l", "serving.noctaya.io/gateway="+name, "-o", "jsonpath={.items[*].metadata.name}")
+	if err != nil {
+		return nil, fmt.Errorf("get gateway pods: %w: %s", err, output)
+	}
+	pods := strings.Fields(output)
+	slices.Sort(pods)
+	return pods, nil
+}
+
 var _ = BeforeSuite(func() {
 	_, file, _, ok := runtime.Caller(0)
 	Expect(ok).To(BeTrue())
@@ -199,6 +211,8 @@ func dumpDiagnostics() {
 		{"E2E pod descriptions", []string{"describe", "pods", "-n", namespace}},
 		{"Gateway logs", []string{"logs", "-n", namespace, "-l", "serving.noctaya.io/gateway",
 			"--all-containers=true", "--prefix=true", "--tail=" + diagnosticLimit, "--max-log-requests=20"}},
+		{"Scaler logs", []string{"logs", "-n", namespace, "-l", "serving.noctaya.io/scaler",
+			"--all-containers=true", "--prefix=true", "--tail=" + diagnosticLimit, "--max-log-requests=20"}},
 		{"Backend logs", []string{"logs", "-n", namespace, "-l", "serving.noctaya.io/llmservice",
 			"--all-containers=true", "--prefix=true", "--tail=" + diagnosticLimit, "--max-log-requests=20"}},
 		{"KEDA operator logs", []string{"logs", "deployment/" + kedaDeployment, "-n", kedaNamespace, "--tail=" + diagnosticLimit}},
@@ -227,7 +241,21 @@ func startPortForward(service string) *portForward {
 	output, err := kubectl("wait", "--for=condition=Available", "--timeout=120s",
 		"deployment/"+service+"-gateway", "-n", namespace)
 	Expect(err).NotTo(HaveOccurred(), output)
+	return startResourcePortForward("service/"+service, 80)
+}
 
+func startScalerPortForward(service string) *portForward {
+	output, err := kubectl("wait", "--for=condition=Available", "--timeout=120s",
+		"deployment/"+service+"-scaler", "-n", namespace)
+	Expect(err).NotTo(HaveOccurred(), output)
+	return startResourcePortForward("service/"+service+"-scaler", 9091)
+}
+
+func startGatewayPodPortForward(pod string) *portForward {
+	return startResourcePortForward("pod/"+pod, 8080)
+}
+
+func startResourcePortForward(resource string, remotePort int) *portForward {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	Expect(err).NotTo(HaveOccurred())
 	port := listener.Addr().(*net.TCPAddr).Port
@@ -235,7 +263,7 @@ func startPortForward(service string) *portForward {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, "kubectl", "port-forward", "--address=127.0.0.1",
-		"-n", namespace, "service/"+service, fmt.Sprintf("%d:80", port))
+		"-n", namespace, resource, fmt.Sprintf("%d:%d", port, remotePort))
 	cmd.Dir = repoRoot
 	cmd.Stdout = GinkgoWriter
 	cmd.Stderr = GinkgoWriter

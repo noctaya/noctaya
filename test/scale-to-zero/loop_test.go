@@ -84,6 +84,19 @@ func requestChat(port, tokens int, stream bool, timeout time.Duration) (int, str
 	return chat(port, tokens, stream, timeout, nil)
 }
 
+func metricsText(port int) string {
+	response, err := httpClient.Get(fmt.Sprintf("http://127.0.0.1:%d/metrics", port))
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = response.Body.Close() }()
+	content, err := io.ReadAll(response.Body)
+	if err != nil {
+		return ""
+	}
+	return string(content)
+}
+
 var _ = Describe("scale-to-zero loop", Ordered, func() {
 	BeforeAll(func() {
 		applyManifest("runtime.yaml")
@@ -108,9 +121,18 @@ var _ = Describe("scale-to-zero loop", Ordered, func() {
 		Eventually(backendPods, 2*time.Minute, 2*time.Second).
 			WithArguments("stub-svc").
 			Should(Equal(0), "the initial backend pod must finish terminating before activation")
+		Eventually(func() int {
+			pods, _ := gatewayPodNames("stub-svc")
+			return len(pods)
+		}, 2*time.Minute, 2*time.Second).Should(Equal(2), "two gateway replicas must be ready")
+		Eventually(func() string {
+			output, _ := kubectl("get", "deployment", "stub-svc-scaler", "-n", namespace,
+				"-o", "jsonpath={.status.readyReplicas}")
+			return output
+		}, 2*time.Minute, 2*time.Second).Should(Equal("1"))
 	})
 
-	It("renders the External Push scaler", func() {
+	It("renders the aggregate External Push scaler", func() {
 		Eventually(func() string {
 			output, _ := kubectl("get", "scaledobject", "stub-svc", "-n", namespace,
 				"-o", "jsonpath={.spec.triggers[0].type}")
@@ -120,26 +142,20 @@ var _ = Describe("scale-to-zero loop", Ordered, func() {
 		address := mustKubectl("get", "scaledobject", "stub-svc", "-n", namespace,
 			"-o", "jsonpath={.spec.triggers[0].metadata.scalerAddress}")
 		Expect(address).To(Equal("stub-svc-scaler.noctaya-e2e.svc:9090"))
-		mustKubectl("get", "service", "stub-svc-scaler", "-n", namespace)
+		selector := mustKubectl("get", "service", "stub-svc-scaler", "-n", namespace,
+			"-o", "jsonpath={.spec.selector.serving\\.noctaya\\.io/scaler}")
+		Expect(selector).To(Equal("stub-svc"))
 
-		forward := startPortForward("stub-svc")
-		Eventually(func() string {
-			response, err := httpClient.Get(fmt.Sprintf("http://127.0.0.1:%d/metrics", forward.port))
-			if err != nil {
-				return ""
-			}
-			defer func() { _ = response.Body.Close() }()
-			content, err := io.ReadAll(response.Body)
-			if err != nil {
-				return ""
-			}
-			return string(content)
-		}, time.Minute, 2*time.Second).Should(ContainSubstring("noctaya_gateway_scaler_streams 1"))
+		forward := startScalerPortForward("stub-svc")
+		Eventually(metricsText, time.Minute, 2*time.Second).
+			WithArguments(forward.port).
+			Should(ContainSubstring("noctaya_gateway_scaler_streams 1"))
+		Eventually(metricsText, time.Minute, 2*time.Second).
+			WithArguments(forward.port).
+			Should(ContainSubstring("noctaya_scaler_gateway_members 2"))
 	})
 
-	It("pushes a cold activation before fallback polling (0→1)", func() {
-		forward := startPortForward("stub-svc")
-
+	It("preserves aggregate activation through gateway replacement (0→1)", func() {
 		mustKubectl("scale", "deployment/"+managerDeployment, "-n", managerNamespace, "--replicas=0")
 		Eventually(func() string {
 			output, _ := kubectl("get", "deployment", managerDeployment, "-n", managerNamespace,
@@ -178,18 +194,16 @@ var _ = Describe("scale-to-zero loop", Ordered, func() {
 		output, err := kubectl("rollout", "status", "deployment/"+kedaDeployment,
 			"-n", kedaNamespace, "--timeout=180s")
 		Expect(err).NotTo(HaveOccurred(), output)
-		Eventually(func() string {
-			response, err := httpClient.Get(fmt.Sprintf("http://127.0.0.1:%d/metrics", forward.port))
-			if err != nil {
-				return ""
-			}
-			defer func() { _ = response.Body.Close() }()
-			content, err := io.ReadAll(response.Body)
-			if err != nil {
-				return ""
-			}
-			return string(content)
-		}, time.Minute, time.Second).Should(ContainSubstring("noctaya_gateway_scaler_streams 1"))
+		scalerForward := startScalerPortForward("stub-svc")
+		Eventually(metricsText, time.Minute, time.Second).
+			WithArguments(scalerForward.port).
+			Should(ContainSubstring("noctaya_gateway_scaler_streams 1"))
+
+		pods, err := gatewayPodNames("stub-svc")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(pods).To(HaveLen(2))
+		survivingPod, replacedPod := pods[0], pods[1]
+		forward := startGatewayPodPortForward(survivingPod)
 
 		result := make(chan chatResult, 1)
 		go func() {
@@ -197,9 +211,22 @@ var _ = Describe("scale-to-zero loop", Ordered, func() {
 			result <- chatResult{code: code, body: body, err: err}
 		}()
 
+		Eventually(metricsText, 10*time.Second, 200*time.Millisecond).
+			WithArguments(scalerForward.port).
+			Should(ContainSubstring("noctaya_scaler_demand 1"))
+		mustKubectl("delete", "pod", replacedPod, "-n", namespace, "--wait=true")
+
 		Eventually(backendReplicas, 15*time.Second, 500*time.Millisecond).
 			WithArguments("stub-svc").
 			Should(BeNumerically(">=", 1), "push activation should not wait for the 60-second fallback poll")
+		Eventually(func() []string {
+			pods, _ := gatewayPodNames("stub-svc")
+			return pods
+		}, 2*time.Minute, time.Second).Should(And(
+			HaveLen(2),
+			ContainElement(survivingPod),
+			Not(ContainElement(replacedPod)),
+		))
 
 		mustKubectl("patch", "scaledobject", "stub-svc", "-n", namespace,
 			"--type=merge", "-p", `{"spec":{"pollingInterval":5}}`)
