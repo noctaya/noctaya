@@ -2,14 +2,6 @@
 
 set -euo pipefail
 
-case "${E2E_SCALER_MODE}" in
-  metrics-api | external-push) ;;
-  *)
-    echo "E2E_SCALER_MODE must be metrics-api or external-push." >&2
-    exit 1
-    ;;
-esac
-
 for command in "${KIND}" "${KUBECTL}" "${HELM}"; do
   command -v "${command}" >/dev/null 2>&1 || {
     echo "${command} is not installed." >&2
@@ -76,5 +68,4 @@ KUBECONFIG="${E2E_KUBECONFIG}" \
   NOCTAYA_E2E_MANAGER_IMAGE="${E2E_MANAGER_IMG}" \
   NOCTAYA_E2E_GATEWAY_IMAGE="${E2E_GATEWAY_IMG}" \
   NOCTAYA_E2E_STUB_IMAGE="${E2E_STUB_IMG}" \
-  NOCTAYA_E2E_SCALER_MODE="${E2E_SCALER_MODE}" \
   go test -tags=e2e ./test/scale-to-zero/ -v -ginkgo.v -timeout 20m

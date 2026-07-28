@@ -24,13 +24,9 @@ jobs:
   scale-to-zero:
     permissions:
       contents: read
-    name: Scale-to-zero (${{ matrix.scaler-mode }})
+    name: External Push lifecycle
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        scaler-mode: [metrics-api, external-push]
     steps:
       - name: Clone the code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -56,4 +52,4 @@ jobs:
           sudo mv ./kind /usr/local/bin/kind
 
       - name: Run E2E lifecycle
-        run: make test-e2e E2E_SCALER_MODE=${{ matrix.scaler-mode }}
+        run: make test-e2e

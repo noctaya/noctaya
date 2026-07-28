@@ -45,12 +45,13 @@ const (
 	namespace         = "noctaya-e2e"
 	managerNamespace  = "noctaya-system"
 	managerDeployment = "noctaya-controller-manager"
+	kedaNamespace     = "keda"
+	kedaDeployment    = "keda-operator"
 	fakeResource      = "noctaya.io/fake-gpu"
 )
 
 var (
 	repoRoot        string
-	scalerMode      string
 	kustomize       string
 	expectedKind    string
 	managerImage    string
@@ -102,8 +103,8 @@ func applyYAML(objects []byte) {
 }
 
 func applyManager() {
-	overlay := filepath.Join(repoRoot, "test", "scale-to-zero", "kustomize", scalerMode)
-	render := exec.Command(kustomize, "build", overlay)
+	base := filepath.Join(repoRoot, "test", "scale-to-zero", "kustomize", "base")
+	render := exec.Command(kustomize, "build", base)
 	render.Dir = repoRoot
 	objects, err := render.Output()
 	Expect(err).NotTo(HaveOccurred())
@@ -139,9 +140,6 @@ var _ = BeforeSuite(func() {
 	var err error
 	repoRoot, err = filepath.Abs(filepath.Join(filepath.Dir(file), "..", ".."))
 	Expect(err).NotTo(HaveOccurred())
-
-	scalerMode = os.Getenv("NOCTAYA_E2E_SCALER_MODE")
-	Expect([]string{"metrics-api", "external-push"}).To(ContainElement(scalerMode))
 
 	expectedKind = os.Getenv("NOCTAYA_E2E_KIND_CLUSTER")
 	Expect(expectedKind).NotTo(BeEmpty(), "run this suite through make test-e2e")
@@ -203,7 +201,7 @@ func dumpDiagnostics() {
 			"--all-containers=true", "--prefix=true", "--tail=" + diagnosticLimit, "--max-log-requests=20"}},
 		{"Backend logs", []string{"logs", "-n", namespace, "-l", "serving.noctaya.io/llmservice",
 			"--all-containers=true", "--prefix=true", "--tail=" + diagnosticLimit, "--max-log-requests=20"}},
-		{"KEDA operator logs", []string{"logs", "deployment/keda-operator", "-n", "keda", "--tail=" + diagnosticLimit}},
+		{"KEDA operator logs", []string{"logs", "deployment/" + kedaDeployment, "-n", kedaNamespace, "--tail=" + diagnosticLimit}},
 		{"E2E events", []string{"get", "events", "-n", namespace, "--sort-by=.lastTimestamp"}},
 	}
 	for _, command := range commands {

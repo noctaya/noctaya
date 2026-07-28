@@ -58,7 +58,6 @@ test-docs: ## Install pinned documentation dependencies and build the Docusaurus
 
 E2E_KIND_CLUSTER ?= noctaya-test-e2e
 E2E_KUBECONFIG ?= $(abspath $(LOCALBIN)/noctaya-test-e2e.kubeconfig)
-E2E_SCALER_MODE ?= metrics-api
 E2E_KEDA_VERSION ?= 2.20.1
 E2E_MANAGER_IMG ?= noctaya.io/noctaya:e2e
 E2E_GATEWAY_IMG ?= noctaya.io/noctaya-gateway:e2e
@@ -81,14 +80,13 @@ load-e2e-images:
 	rm -rf "$(E2E_ARCHIVE_DIR)"
 
 .PHONY: test-e2e
-test-e2e: kustomize ## Run one scaler-mode E2E lifecycle in an isolated disposable Kind cluster.
+test-e2e: kustomize ## Run the External Push lifecycle in an isolated disposable Kind cluster.
 	@CONTAINER_TOOL="$(CONTAINER_TOOL)" \
 		E2E_GATEWAY_IMG="$(E2E_GATEWAY_IMG)" \
 		E2E_KEDA_VERSION="$(E2E_KEDA_VERSION)" \
 		E2E_KIND_CLUSTER="$(E2E_KIND_CLUSTER)" \
 		E2E_KUBECONFIG="$(E2E_KUBECONFIG)" \
 		E2E_MANAGER_IMG="$(E2E_MANAGER_IMG)" \
-		E2E_SCALER_MODE="$(E2E_SCALER_MODE)" \
 		E2E_STUB_IMG="$(E2E_STUB_IMG)" \
 		HELM="$(HELM)" \
 		KIND="$(KIND)" \

@@ -22,4 +22,3 @@ patches:
           - --leader-elect
           - --gateway-image=noctaya.io/noctaya-gateway:e2e
           - --gateway-replicas=1
-          - --scaler-mode=metrics-api

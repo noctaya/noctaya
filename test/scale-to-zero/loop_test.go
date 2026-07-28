@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -91,18 +90,16 @@ var _ = Describe("scale-to-zero loop", Ordered, func() {
 		applyManifest("llmservice.yaml")
 	})
 
-	if os.Getenv("NOCTAYA_E2E_SCALER_MODE") == "metrics-api" {
-		It("serves authenticated manager metrics", func() {
-			applyManifest("metrics.yaml")
-			Eventually(func() string {
-				output, _ := kubectl("get", "pod", "metrics-reader", "-n", namespace,
-					"-o", "jsonpath={.status.phase}")
-				return output
-			}, 2*time.Minute, 2*time.Second).Should(Equal("Succeeded"))
-			logs := mustKubectl("logs", "metrics-reader", "-n", namespace)
-			Expect(logs).To(ContainSubstring("controller_runtime_"))
-		})
-	}
+	It("serves authenticated manager metrics", func() {
+		applyManifest("metrics.yaml")
+		Eventually(func() string {
+			output, _ := kubectl("get", "pod", "metrics-reader", "-n", namespace,
+				"-o", "jsonpath={.status.phase}")
+			return output
+		}, 2*time.Minute, 2*time.Second).Should(Equal("Succeeded"))
+		logs := mustKubectl("logs", "metrics-reader", "-n", namespace)
+		Expect(logs).To(ContainSubstring("controller_runtime_"))
+	})
 
 	It("holds the idle backend at zero", func() {
 		Eventually(backendReplicas, 2*time.Minute, 3*time.Second).
@@ -113,21 +110,12 @@ var _ = Describe("scale-to-zero loop", Ordered, func() {
 			Should(Equal(0), "the initial backend pod must finish terminating before activation")
 	})
 
-	It("renders the selected KEDA scaler transport", func() {
+	It("renders the External Push scaler", func() {
 		Eventually(func() string {
 			output, _ := kubectl("get", "scaledobject", "stub-svc", "-n", namespace,
 				"-o", "jsonpath={.spec.triggers[0].type}")
 			return output
-		}, time.Minute, 2*time.Second).Should(Equal(scalerMode))
-
-		if scalerMode == "metrics-api" {
-			output, err := kubectl("get", "service", "stub-svc-scaler", "-n", namespace,
-				"--ignore-not-found", "-o", "name")
-			Expect(err).NotTo(HaveOccurred(), output)
-			Expect(strings.TrimSpace(output)).To(BeEmpty(),
-				"metrics-api mode must not create an internal scaler Service")
-			return
-		}
+		}, time.Minute, 2*time.Second).Should(Equal("external-push"))
 
 		address := mustKubectl("get", "scaledobject", "stub-svc", "-n", namespace,
 			"-o", "jsonpath={.spec.triggers[0].metadata.scalerAddress}")
@@ -149,16 +137,77 @@ var _ = Describe("scale-to-zero loop", Ordered, func() {
 		}, time.Minute, 2*time.Second).Should(ContainSubstring("noctaya_gateway_scaler_streams 1"))
 	})
 
-	It("wakes on a cold streaming request (0→1)", func() {
+	It("pushes a cold activation before fallback polling (0→1)", func() {
 		forward := startPortForward("stub-svc")
 
-		code, body, err := requestChat(forward.port, 0, true, 90*time.Second)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(code).To(Equal(http.StatusOK))
-		Expect(body).To(ContainSubstring("[DONE]"), "the completion stream must not be truncated")
-		Eventually(backendReplicas, 30*time.Second, time.Second).
+		mustKubectl("scale", "deployment/"+managerDeployment, "-n", managerNamespace, "--replicas=0")
+		Eventually(func() string {
+			output, _ := kubectl("get", "deployment", managerDeployment, "-n", managerNamespace,
+				"-o", "jsonpath={.status.replicas}")
+			return output
+		}, time.Minute, time.Second).Should(Or(BeEmpty(), Equal("0")))
+		DeferCleanup(func() {
+			mustKubectl("scale", "deployment/"+managerDeployment, "-n", managerNamespace, "--replicas=1")
+			output, err := kubectl("rollout", "status", "deployment/"+managerDeployment,
+				"-n", managerNamespace, "--timeout=180s")
+			Expect(err).NotTo(HaveOccurred(), output)
+		})
+
+		mustKubectl("scale", "deployment/"+kedaDeployment, "-n", kedaNamespace, "--replicas=0")
+		Eventually(func() string {
+			output, _ := kubectl("get", "deployment", kedaDeployment, "-n", kedaNamespace,
+				"-o", "jsonpath={.status.replicas}")
+			return output
+		}, time.Minute, time.Second).Should(Or(BeEmpty(), Equal("0")))
+		DeferCleanup(func() {
+			mustKubectl("scale", "deployment/"+kedaDeployment, "-n", kedaNamespace, "--replicas=1")
+			output, err := kubectl("rollout", "status", "deployment/"+kedaDeployment,
+				"-n", kedaNamespace, "--timeout=180s")
+			Expect(err).NotTo(HaveOccurred(), output)
+		})
+
+		mustKubectl("patch", "scaledobject", "stub-svc", "-n", namespace,
+			"--type=merge", "-p", `{"spec":{"pollingInterval":60}}`)
+		Eventually(func() string {
+			output, _ := kubectl("get", "scaledobject", "stub-svc", "-n", namespace,
+				"-o", "jsonpath={.spec.pollingInterval}")
+			return output
+		}, time.Minute, time.Second).Should(Equal("60"))
+
+		mustKubectl("scale", "deployment/"+kedaDeployment, "-n", kedaNamespace, "--replicas=1")
+		output, err := kubectl("rollout", "status", "deployment/"+kedaDeployment,
+			"-n", kedaNamespace, "--timeout=180s")
+		Expect(err).NotTo(HaveOccurred(), output)
+		Eventually(func() string {
+			response, err := httpClient.Get(fmt.Sprintf("http://127.0.0.1:%d/metrics", forward.port))
+			if err != nil {
+				return ""
+			}
+			defer func() { _ = response.Body.Close() }()
+			content, err := io.ReadAll(response.Body)
+			if err != nil {
+				return ""
+			}
+			return string(content)
+		}, time.Minute, time.Second).Should(ContainSubstring("noctaya_gateway_scaler_streams 1"))
+
+		result := make(chan chatResult, 1)
+		go func() {
+			code, body, err := requestChat(forward.port, 0, true, 90*time.Second)
+			result <- chatResult{code: code, body: body, err: err}
+		}()
+
+		Eventually(backendReplicas, 15*time.Second, 500*time.Millisecond).
 			WithArguments("stub-svc").
-			Should(BeNumerically(">=", 1), "the request should wake the backend")
+			Should(BeNumerically(">=", 1), "push activation should not wait for the 60-second fallback poll")
+
+		mustKubectl("patch", "scaledobject", "stub-svc", "-n", namespace,
+			"--type=merge", "-p", `{"spec":{"pollingInterval":5}}`)
+		var completed chatResult
+		Eventually(result, 90*time.Second).Should(Receive(&completed))
+		Expect(completed.err).NotTo(HaveOccurred())
+		Expect(completed.code).To(Equal(http.StatusOK))
+		Expect(completed.body).To(ContainSubstring("[DONE]"), "the completion stream must not be truncated")
 	})
 
 	It("scales out under concurrent load (1→2)", func() {
