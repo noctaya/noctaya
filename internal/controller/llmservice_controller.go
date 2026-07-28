@@ -45,6 +45,11 @@ import (
 
 const fieldOwner = client.FieldOwner("noctaya-operator")
 
+const (
+	conditionAutoscalingReady = "AutoscalingReady"
+	conditionReady            = "Ready"
+)
+
 type LLMServiceReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
@@ -52,10 +57,8 @@ type LLMServiceReconciler struct {
 	// GatewayImage is the data-plane proxy image the operator deploys per LLMService.
 	GatewayImage string
 	// GatewayReplicas is the per-LLMService gateway replica count (default 1; see
-	// BuildGatewayDeployment for mode-specific constraints).
+	// BuildGatewayDeployment for the current single-replica constraint).
 	GatewayReplicas int32
-	// ScalerMode selects KEDA's polling or streaming activation transport.
-	ScalerMode backend.ScalerMode
 }
 
 // +kubebuilder:rbac:groups=serving.noctaya.io,resources=llmservices,verbs=get;list;watch
@@ -89,6 +92,18 @@ func (r *LLMServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return r.fail(ctx, &svc, "ModelResolution", err)
 	}
 
+	so, err := backend.BuildScaledObject(&svc)
+	if err != nil {
+		return r.fail(ctx, &svc, "ScaledObject", err)
+	}
+	if err := r.apply(ctx, &svc, so); err != nil {
+		if meta.IsNoMatchError(err) {
+			err = fmt.Errorf("KEDA ScaledObject CRD is required before deploying an LLMService: %w", err)
+			return r.fail(ctx, &svc, "AutoscalingUnavailable", err)
+		}
+		return r.fail(ctx, &svc, "ApplyScaledObject", err)
+	}
+
 	dep, err := backend.BuildDeployment(adapter, &svc, rt, resolved)
 	if err != nil {
 		return r.fail(ctx, &svc, "Render", err)
@@ -99,13 +114,17 @@ func (r *LLMServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if err := r.apply(ctx, &svc, backend.BuildBackendService(&svc, rt)); err != nil {
 		return r.fail(ctx, &svc, "ApplyBackendService", err)
 	}
-	if err := r.apply(ctx, &svc, backend.BuildGatewayDeployment(&svc, r.GatewayImage, r.GatewayReplicas, r.ScalerMode)); err != nil {
+	gatewayDeployment, err := backend.BuildGatewayDeployment(&svc, r.GatewayImage, r.GatewayReplicas)
+	if err != nil {
+		return r.fail(ctx, &svc, "GatewayConfig", err)
+	}
+	if err := r.apply(ctx, &svc, gatewayDeployment); err != nil {
 		return r.fail(ctx, &svc, "ApplyGateway", err)
 	}
 	if err := r.apply(ctx, &svc, backend.BuildGatewayService(&svc)); err != nil {
 		return r.fail(ctx, &svc, "ApplyGatewayService", err)
 	}
-	if err := r.reconcileGatewayScalerService(ctx, &svc); err != nil {
+	if err := r.apply(ctx, &svc, backend.BuildGatewayScalerService(&svc)); err != nil {
 		return r.fail(ctx, &svc, "ApplyGatewayScalerService", err)
 	}
 
@@ -129,14 +148,6 @@ func (r *LLMServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	}
 
-	so, err := backend.BuildScaledObject(&svc, r.ScalerMode)
-	if err != nil {
-		return r.fail(ctx, &svc, "ScaledObject", err)
-	}
-	if err := r.applyOptional(ctx, &svc, so, "ScaledObject (autoscaling disabled)"); err != nil {
-		return r.fail(ctx, &svc, "ApplyScaledObject", err)
-	}
-
 	var live appsv1.Deployment
 	if err := r.Get(ctx, client.ObjectKeyFromObject(dep), &live); err != nil {
 		return ctrl.Result{}, err
@@ -144,21 +155,6 @@ func (r *LLMServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	log.Info("Reconciled LLMService", "runtime", rt.Name, "readyReplicas", live.Status.ReadyReplicas)
 	return r.updateStatus(ctx, &svc, rt.Name, &live)
-}
-
-func (r *LLMServiceReconciler) reconcileGatewayScalerService(ctx context.Context, svc *servingv1alpha1.LLMService) error {
-	service := backend.BuildGatewayScalerService(svc)
-	if r.ScalerMode == backend.ScalerModeExternalPush {
-		return r.apply(ctx, svc, service)
-	}
-	var live corev1.Service
-	if err := r.Get(ctx, client.ObjectKeyFromObject(service), &live); err != nil {
-		return client.IgnoreNotFound(err)
-	}
-	if !metav1.IsControlledBy(&live, svc) {
-		return nil
-	}
-	return client.IgnoreNotFound(r.Delete(ctx, &live))
 }
 
 // resolveRuntime selects the backend: a pinned name, else the highest-priority runtime
@@ -222,20 +218,6 @@ func (r *LLMServiceReconciler) apply(ctx context.Context, owner *servingv1alpha1
 	return r.Apply(ctx, ac, fieldOwner, client.ForceOwnership)
 }
 
-// applyOptional SSA-applies an unstructured dependency. If its CRD is absent, it logs
-// skipMsg and continues so Noctaya can run without the optional integration installed.
-func (r *LLMServiceReconciler) applyOptional(ctx context.Context, owner *servingv1alpha1.LLMService, obj *unstructured.Unstructured, skipMsg string) error {
-	if err := controllerutil.SetControllerReference(owner, obj, r.Scheme); err != nil {
-		return err
-	}
-	err := r.Apply(ctx, client.ApplyConfigurationFromUnstructured(obj), fieldOwner, client.ForceOwnership)
-	if meta.IsNoMatchError(err) {
-		logf.FromContext(ctx).Info("CRD not installed; skipping " + skipMsg)
-		return nil
-	}
-	return err
-}
-
 // ensureCreated creates an owned object once and ignores AlreadyExists. Used for the
 // cache PVC and prewarm Job, which have immutable fields and are never updated in place.
 func (r *LLMServiceReconciler) ensureCreated(ctx context.Context, owner *servingv1alpha1.LLMService, obj client.Object) error {
@@ -266,7 +248,15 @@ func (r *LLMServiceReconciler) updateStatus(ctx context.Context, svc *servingv1a
 	svc.Status.Replicas = dep.Status.ReadyReplicas
 	svc.Status.EndpointURL = fmt.Sprintf("http://%s.%s.svc/v1", svc.Name, svc.Namespace)
 
-	cond := metav1.Condition{Type: "Ready", ObservedGeneration: svc.Generation}
+	meta.SetStatusCondition(&svc.Status.Conditions, metav1.Condition{
+		Type:               conditionAutoscalingReady,
+		Status:             metav1.ConditionTrue,
+		Reason:             "ScaledObjectApplied",
+		Message:            "KEDA External Push autoscaling is configured",
+		ObservedGeneration: svc.Generation,
+	})
+
+	cond := metav1.Condition{Type: conditionReady, ObservedGeneration: svc.Generation}
 	switch phase {
 	case servingv1alpha1.PhaseReady:
 		cond.Status, cond.Reason, cond.Message = metav1.ConditionTrue, "Available", "Serving pods are ready"
@@ -292,8 +282,17 @@ func (r *LLMServiceReconciler) fail(ctx context.Context, svc *servingv1alpha1.LL
 	logf.FromContext(ctx).Error(err, "Failed to reconcile LLMService", "reason", reason)
 	oldStatus := svc.Status.DeepCopy()
 	svc.Status.Phase = servingv1alpha1.PhaseDegraded
+	if reason == "AutoscalingUnavailable" {
+		meta.SetStatusCondition(&svc.Status.Conditions, metav1.Condition{
+			Type:               conditionAutoscalingReady,
+			Status:             metav1.ConditionFalse,
+			Reason:             reason,
+			Message:            err.Error(),
+			ObservedGeneration: svc.Generation,
+		})
+	}
 	meta.SetStatusCondition(&svc.Status.Conditions, metav1.Condition{
-		Type:               "Ready",
+		Type:               conditionReady,
 		Status:             metav1.ConditionFalse,
 		Reason:             reason,
 		Message:            err.Error(),

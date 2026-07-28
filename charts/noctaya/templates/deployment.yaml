@@ -1,9 +1,8 @@
-{{- $scalerMode := .Values.gateway.scalerMode -}}
-{{- if not (has $scalerMode (list "metrics-api" "external-push")) -}}
-{{- fail "gateway.scalerMode must be metrics-api or external-push" -}}
+{{- if hasKey .Values.gateway "scalerMode" -}}
+{{- fail "gateway.scalerMode has been removed; Noctaya always uses KEDA External Push" -}}
 {{- end -}}
-{{- if and (eq $scalerMode "external-push") (ne (int .Values.gateway.replicas) 1) -}}
-{{- fail "gateway.replicas must be 1 when gateway.scalerMode is external-push" -}}
+{{- if ne (int .Values.gateway.replicas) 1 -}}
+{{- fail "gateway.replicas must be 1 until demand aggregation is available" -}}
 {{- end -}}
 apiVersion: apps/v1
 kind: Deployment
@@ -34,7 +33,6 @@ spec:
             - --metrics-bind-address=0
             - --gateway-image={{ include "noctaya.gatewayImage" . }}
             - --gateway-replicas={{ .Values.gateway.replicas }}
-            - --scaler-mode={{ $scalerMode }}
           livenessProbe:
             httpGet:
               path: /healthz

@@ -17,10 +17,8 @@ operator:
       memory: 128Mi
 
 gateway:
-  # external-push requires exactly one gateway replica. metrics-api remains the
-  # compatibility default and permits more replicas with less precise activation.
+  # One replica is required until demand aggregation is available.
   replicas: 1
-  scalerMode: metrics-api
 
 serviceAccount:
   create: true

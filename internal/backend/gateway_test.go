@@ -31,28 +31,39 @@ func gatewaySvc() *servingv1alpha1.LLMService {
 	return &servingv1alpha1.LLMService{ObjectMeta: metav1.ObjectMeta{Name: "qwen3-8b", Namespace: "ai"}}
 }
 
-func TestGatewayReplicasDefaultAndOverride(t *testing.T) {
+func TestGatewayReplicasDefaultAndValidation(t *testing.T) {
 	g := NewWithT(t)
 
-	dep := backend.BuildGatewayDeployment(gatewaySvc(), "img", 0, backend.ScalerModeMetricsAPI)
+	dep, err := backend.BuildGatewayDeployment(gatewaySvc(), "img", 0)
+	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(dep.Spec.Replicas).NotTo(BeNil())
 	g.Expect(*dep.Spec.Replicas).To(Equal(int32(1)))
 
-	dep = backend.BuildGatewayDeployment(gatewaySvc(), "img", 3, backend.ScalerModeMetricsAPI)
-	g.Expect(*dep.Spec.Replicas).To(Equal(int32(3)))
+	g.Expect(backend.ValidateGatewayReplicas(1)).To(Succeed())
+	for _, replicas := range []int{-1, 0, 2} {
+		g.Expect(backend.ValidateGatewayReplicas(replicas)).To(MatchError(
+			"gateway replicas must be 1 until demand aggregation is available",
+		))
+	}
+	for _, replicas := range []int32{-1, 2} {
+		_, err := backend.BuildGatewayDeployment(gatewaySvc(), "img", replicas)
+		g.Expect(err).To(MatchError("gateway replicas must be 1 until demand aggregation is available"))
+	}
 }
 
 func TestGatewayCarriesImagePullSecrets(t *testing.T) {
 	g := NewWithT(t)
 	svc := gatewaySvc()
 	svc.Spec.ImagePullSecrets = []corev1.LocalObjectReference{{Name: "regcred"}}
-	dep := backend.BuildGatewayDeployment(svc, "img", 1, backend.ScalerModeMetricsAPI)
+	dep, err := backend.BuildGatewayDeployment(svc, "img", 1)
+	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(dep.Spec.Template.Spec.ImagePullSecrets).To(ContainElement(corev1.LocalObjectReference{Name: "regcred"}))
 }
 
 func TestGatewayPointsAtBackendService(t *testing.T) {
 	g := NewWithT(t)
-	dep := backend.BuildGatewayDeployment(gatewaySvc(), "img", 1, backend.ScalerModeMetricsAPI)
+	dep, err := backend.BuildGatewayDeployment(gatewaySvc(), "img", 1)
+	g.Expect(err).NotTo(HaveOccurred())
 	env := dep.Spec.Template.Spec.Containers[0].Env
 	var backendURL string
 	for _, e := range env {
@@ -63,10 +74,11 @@ func TestGatewayPointsAtBackendService(t *testing.T) {
 	g.Expect(backendURL).To(Equal("http://qwen3-8b-backend.ai.svc:80"))
 }
 
-func TestExternalPushGatewayExposesInternalScaler(t *testing.T) {
+func TestGatewayExposesInternalScaler(t *testing.T) {
 	g := NewWithT(t)
 	svc := gatewaySvc()
-	dep := backend.BuildGatewayDeployment(svc, "img", 1, backend.ScalerModeExternalPush)
+	dep, err := backend.BuildGatewayDeployment(svc, "img", 1)
+	g.Expect(err).NotTo(HaveOccurred())
 	container := dep.Spec.Template.Spec.Containers[0]
 	g.Expect(container.Env).To(ContainElement(corev1.EnvVar{
 		Name:  "NOCTAYA_SCALER_LISTEN_ADDR",
@@ -82,14 +94,7 @@ func TestExternalPushGatewayExposesInternalScaler(t *testing.T) {
 	g.Expect(service.Spec.Ports).To(HaveLen(1))
 	g.Expect(service.Spec.Ports[0].Name).To(Equal("grpc"))
 	g.Expect(service.Spec.Ports[0].Port).To(Equal(int32(9090)))
-}
-
-func TestMetricsAPIGatewayDoesNotExposeScalerPort(t *testing.T) {
-	g := NewWithT(t)
-	dep := backend.BuildGatewayDeployment(gatewaySvc(), "img", 1, backend.ScalerModeMetricsAPI)
-	container := dep.Spec.Template.Spec.Containers[0]
-	g.Expect(container.Env).NotTo(ContainElement(HaveField("Name", "NOCTAYA_SCALER_LISTEN_ADDR")))
-	g.Expect(container.Ports).NotTo(ContainElement(HaveField("Name", "grpc")))
+	g.Expect(dep.Spec.Template.Spec.TerminationGracePeriodSeconds).To(HaveValue(Equal(int64(30))))
 }
 
 func TestServicesExposeMetricsDiscoveryContract(t *testing.T) {

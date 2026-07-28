@@ -27,14 +27,25 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
-	"github.com/noctaya/noctaya/internal/backend"
 	"github.com/noctaya/noctaya/internal/backend/registry"
 )
+
+type applyErrorClient struct {
+	client.Client
+	err error
+}
+
+func (c *applyErrorClient) Apply(context.Context, k8sruntime.ApplyConfiguration, ...client.ApplyOption) error {
+	return c.err
+}
 
 var _ = Describe("LLMService Controller", func() {
 	Context("When reconciling an LLMService", func() {
@@ -129,6 +140,17 @@ var _ = Describe("LLMService Controller", func() {
 			Expect(updated.Status.ResolvedRuntime).To(Equal(runtimeName))
 			Expect(updated.Status.EndpointURL).To(ContainSubstring(svcName))
 			Expect(meta.FindStatusCondition(updated.Status.Conditions, "Ready").Reason).To(Equal("ScaledToZero"))
+			Expect(meta.FindStatusCondition(updated.Status.Conditions, "AutoscalingReady").Status).To(Equal(metav1.ConditionTrue))
+
+			scaledObject := &unstructured.Unstructured{}
+			scaledObject.SetAPIVersion("keda.sh/v1alpha1")
+			scaledObject.SetKind("ScaledObject")
+			Expect(k8sClient.Get(ctx, key, scaledObject)).To(Succeed())
+			triggers, found, err := unstructured.NestedSlice(scaledObject.Object, "spec", "triggers")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(triggers).To(HaveLen(1))
+			Expect(triggers[0]).To(HaveKeyWithValue("type", "external-push"))
 		})
 
 		It("resolves the runtime via vendor selector", func() {
@@ -178,10 +200,8 @@ var _ = Describe("LLMService Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("renders and removes the internal scaler Service with external-push mode", func() {
-			r := reconciler()
-			r.ScalerMode = backend.ScalerModeExternalPush
-			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
+		It("renders the internal External Push scaler", func() {
+			_, err := reconciler().Reconcile(ctx, reconcile.Request{NamespacedName: key})
 			Expect(err).NotTo(HaveOccurred())
 
 			gwDep := &appsv1.Deployment{}
@@ -194,11 +214,31 @@ var _ = Describe("LLMService Controller", func() {
 			Expect(k8sClient.Get(ctx, scalerKey, scalerService)).To(Succeed())
 			Expect(scalerService.Spec.Ports).To(HaveLen(1))
 			Expect(scalerService.Spec.Ports[0].Name).To(Equal("grpc"))
+		})
 
-			r.ScalerMode = backend.ScalerModeMetricsAPI
-			_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(k8sClient.Get(ctx, scalerKey, &corev1.Service{})).To(Satisfy(apierrors.IsNotFound))
+		It("reports missing KEDA without creating a model backend", func() {
+			r := reconciler()
+			r.Client = &applyErrorClient{
+				Client: k8sClient,
+				err: &meta.NoKindMatchError{
+					GroupKind:        schema.GroupKind{Group: "keda.sh", Kind: "ScaledObject"},
+					SearchedVersions: []string{"v1alpha1"},
+				},
+			}
+
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
+			Expect(err).To(HaveOccurred())
+
+			updated := &servingv1alpha1.LLMService{}
+			Expect(k8sClient.Get(ctx, key, updated)).To(Succeed())
+			Expect(updated.Status.Phase).To(Equal(servingv1alpha1.PhaseDegraded))
+			condition := meta.FindStatusCondition(updated.Status.Conditions, "AutoscalingReady")
+			Expect(condition).NotTo(BeNil())
+			Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(condition.Reason).To(Equal("AutoscalingUnavailable"))
+
+			deployment := &appsv1.Deployment{}
+			Expect(k8sClient.Get(ctx, key, deployment)).To(Satisfy(apierrors.IsNotFound))
 		})
 
 		It("marks the service Degraded when the runtime is missing", func() {

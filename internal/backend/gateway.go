@@ -31,8 +31,7 @@ import (
 const (
 	gatewayPort       = 8080
 	gatewayScalerPort = 9090
-	// One replica gives either scaler transport a complete demand view. External-push
-	// enforces it; metrics-api keeps the legacy override for compatibility.
+	// One replica gives the scaler a complete demand view until aggregation is implemented.
 	defaultGatewayReplicas = 1
 	gatewayLabel           = "serving.noctaya.io/gateway"
 	backendSvcSuffix       = "-backend"
@@ -41,6 +40,13 @@ const (
 	portNameGRPC           = "grpc"
 	serviceKind            = "Service"
 )
+
+func ValidateGatewayReplicas(replicas int) error {
+	if replicas != defaultGatewayReplicas {
+		return fmt.Errorf("gateway replicas must be %d until demand aggregation is available", defaultGatewayReplicas)
+	}
+	return nil
+}
 
 func BackendServiceName(svc *servingv1alpha1.LLMService) string {
 	return svc.Name + backendSvcSuffix
@@ -121,9 +127,12 @@ func BuildGatewayScalerService(svc *servingv1alpha1.LLMService) *corev1.Service 
 	}
 }
 
-func BuildGatewayDeployment(svc *servingv1alpha1.LLMService, image string, replicas int32, scalerMode ScalerMode) *appsv1.Deployment {
-	if replicas <= 0 {
+func BuildGatewayDeployment(svc *servingv1alpha1.LLMService, image string, replicas int32) (*appsv1.Deployment, error) {
+	if replicas == 0 {
 		replicas = defaultGatewayReplicas
+	}
+	if err := ValidateGatewayReplicas(int(replicas)); err != nil {
+		return nil, err
 	}
 	backendURL := fmt.Sprintf("http://%s.%s.svc:80", BackendServiceName(svc), svc.Namespace)
 	labels := gatewaySelectorLabels(svc)
@@ -131,11 +140,11 @@ func BuildGatewayDeployment(svc *servingv1alpha1.LLMService, image string, repli
 	env := []corev1.EnvVar{
 		{Name: gateway.EnvBackendURL, Value: backendURL},
 		{Name: gateway.EnvListenAddr, Value: fmt.Sprintf(":%d", gatewayPort)},
+		{Name: gateway.EnvScalerListenAddr, Value: fmt.Sprintf(":%d", gatewayScalerPort)},
 	}
-	ports := []corev1.ContainerPort{{Name: portNameHTTP, ContainerPort: gatewayPort, Protocol: corev1.ProtocolTCP}}
-	if scalerMode == ScalerModeExternalPush {
-		env = append(env, corev1.EnvVar{Name: gateway.EnvScalerListenAddr, Value: fmt.Sprintf(":%d", gatewayScalerPort)})
-		ports = append(ports, corev1.ContainerPort{Name: portNameGRPC, ContainerPort: gatewayScalerPort, Protocol: corev1.ProtocolTCP})
+	ports := []corev1.ContainerPort{
+		{Name: portNameHTTP, ContainerPort: gatewayPort, Protocol: corev1.ProtocolTCP},
+		{Name: portNameGRPC, ContainerPort: gatewayScalerPort, Protocol: corev1.ProtocolTCP},
 	}
 	if at := svc.Spec.Scaling.ActivationTimeout.Duration; at > 0 {
 		env = append(env, corev1.EnvVar{Name: gateway.EnvActivationTimeout, Value: at.String()})
@@ -150,8 +159,10 @@ func BuildGatewayDeployment(svc *servingv1alpha1.LLMService, image string, repli
 	probe := &corev1.Probe{ProbeHandler: corev1.ProbeHandler{
 		HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromInt(gatewayPort)},
 	}}
+	terminationGracePeriodSeconds := int64(30)
 
 	pod := corev1.PodSpec{
+		TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
 		Containers: []corev1.Container{{
 			Name:           "gateway",
 			Image:          image,
@@ -174,5 +185,5 @@ func BuildGatewayDeployment(svc *servingv1alpha1.LLMService, image string, repli
 				Spec:       pod,
 			},
 		},
-	}
+	}, nil
 }

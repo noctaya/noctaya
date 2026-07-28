@@ -44,6 +44,16 @@ jobs:
           helm template noctaya charts/noctaya --namespace noctaya-system \
             --set serviceAccount.create=false \
             --set operator.leaderElect=true >/dev/null
+          if helm template noctaya charts/noctaya --namespace noctaya-system \
+            --set gateway.replicas=2 >/dev/null 2>&1; then
+            echo "Expected gateway.replicas=2 to fail validation." >&2
+            exit 1
+          fi
+          if helm template noctaya charts/noctaya --namespace noctaya-system \
+            --set gateway.scalerMode=metrics-api >/dev/null 2>&1; then
+            echo "Expected the removed gateway.scalerMode value to fail validation." >&2
+            exit 1
+          fi
 
       - name: Running Tests
         run: |

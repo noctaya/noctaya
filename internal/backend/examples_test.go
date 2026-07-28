@@ -172,7 +172,7 @@ func TestDeviceExampleAssociations(t *testing.T) {
 				if _, err := backend.BuildPrewarmJob(&service, &runtime, resolved); err != nil {
 					t.Errorf("%s prewarm Job: %v", serviceFile, err)
 				}
-				if _, err := backend.BuildScaledObject(&service, backend.ScalerModeMetricsAPI); err != nil {
+				if _, err := backend.BuildScaledObject(&service); err != nil {
 					t.Errorf("%s ScaledObject: %v", serviceFile, err)
 				}
 			})
