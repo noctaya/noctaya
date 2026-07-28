@@ -18,12 +18,16 @@ limitations under the License.
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"google.golang.org/grpc"
@@ -32,6 +36,8 @@ import (
 )
 
 var version = "dev"
+
+const shutdownTimeout = 20 * time.Second
 
 func main() {
 	showVersion := flag.Bool("version", false, "Print version and exit.")
@@ -58,16 +64,20 @@ func main() {
 	}
 
 	scalerAddr := os.Getenv(gateway.EnvScalerListenAddr)
-	log.Printf("Noctaya gateway version %s listening on %s, backend %s", version, addr, cfg.BackendURL)
-	if scalerAddr != "" {
-		log.Printf("Noctaya external scaler listening on %s", scalerAddr)
+	if scalerAddr == "" {
+		scalerAddr = gateway.DefaultScalerListenAddr
 	}
-	if err := serve(gw, addr, scalerAddr); err != nil {
+	log.Printf("Noctaya gateway version %s listening on %s, backend %s", version, addr, cfg.BackendURL)
+	log.Printf("Noctaya external scaler listening on %s", scalerAddr)
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := serve(ctx, gw, addr, scalerAddr); err != nil {
 		log.Fatalf("Gateway server failed: %v", err)
 	}
 }
 
-func serve(gw *gateway.Gateway, addr, scalerAddr string) error {
+func serve(ctx context.Context, gw *gateway.Gateway, addr, scalerAddr string) error {
 	httpListener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen for HTTP: %w", err)
@@ -75,9 +85,6 @@ func serve(gw *gateway.Gateway, addr, scalerAddr string) error {
 	httpServer := &http.Server{
 		Handler:           gw.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
-	}
-	if scalerAddr == "" {
-		return httpServer.Serve(httpListener)
 	}
 
 	scalerListener, err := net.Listen("tcp", scalerAddr)
@@ -88,11 +95,54 @@ func serve(gw *gateway.Gateway, addr, scalerAddr string) error {
 	grpcServer := grpc.NewServer()
 	gateway.RegisterExternalScalerServer(grpcServer, gw)
 
-	errors := make(chan error, 2)
-	go func() { errors <- httpServer.Serve(httpListener) }()
-	go func() { errors <- grpcServer.Serve(scalerListener) }()
-	err = <-errors
-	grpcServer.Stop()
-	_ = httpServer.Close()
-	return err
+	serverErrors := make(chan error, 2)
+	go func() {
+		err := httpServer.Serve(httpListener)
+		if errors.Is(err, http.ErrServerClosed) {
+			err = nil
+		}
+		serverErrors <- err
+	}()
+	go func() {
+		err := grpcServer.Serve(scalerListener)
+		if errors.Is(err, grpc.ErrServerStopped) {
+			err = nil
+		}
+		serverErrors <- err
+	}()
+
+	var serveErr error
+	select {
+	case <-ctx.Done():
+	case serveErr = <-serverErrors:
+	}
+	shutdown(httpServer, grpcServer)
+	return serveErr
+}
+
+func shutdown(httpServer *http.Server, grpcServer *grpc.Server) {
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	httpDone := make(chan struct{})
+	go func() {
+		_ = httpServer.Shutdown(ctx)
+		close(httpDone)
+	}()
+	grpcDone := make(chan struct{})
+	go func() {
+		grpcServer.GracefulStop()
+		close(grpcDone)
+	}()
+
+	select {
+	case <-grpcDone:
+	case <-ctx.Done():
+		grpcServer.Stop()
+	}
+	select {
+	case <-httpDone:
+	case <-ctx.Done():
+		_ = httpServer.Close()
+	}
 }

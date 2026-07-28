@@ -48,9 +48,10 @@ const (
 	EnvColdStartMode     = "NOCTAYA_COLDSTART_MODE"
 	EnvHeartbeatInterval = "NOCTAYA_HEARTBEAT_INTERVAL"
 
-	DefaultListenAddr = ":8080"
-	QueuePath         = "/noctaya/queue"
-	MetricsPath       = "/metrics"
+	DefaultListenAddr       = ":8080"
+	DefaultScalerListenAddr = ":9090"
+	QueuePath               = "/noctaya/queue"
+	MetricsPath             = "/metrics"
 
 	// ColdStartKeepalive holds a streaming request open with SSE heartbeats during a
 	// cold start; ColdStartReject returns 503 + Retry-After immediately for the client
@@ -117,7 +118,7 @@ func newMetrics() *metrics {
 			Name: "noctaya_gateway_activation_wait_seconds", Help: "Time spent holding a request until the backend was ready.",
 			Buckets: []float64{0.01, 0.1, 1, 5, 15, 30, 60, 120, 300}}),
 		scalerStreams: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "noctaya_gateway_scaler_streams", Help: "Connected KEDA external-push activation streams."}),
+			Name: "noctaya_gateway_scaler_streams", Help: "Connected KEDA External Push activation streams."}),
 		activationEvents: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "noctaya_gateway_activation_events_total", Help: "Inactive-to-active effective demand transitions."}),
 	}
@@ -143,6 +144,7 @@ type Gateway struct {
 	readyGraceUntil time.Time
 	leaseWatcher    bool
 
+	notifyMu       sync.Mutex
 	subMu          sync.Mutex
 	subscribers    map[uint64]chan bool
 	nextSubscriber uint64
@@ -391,6 +393,9 @@ func (g *Gateway) notifyAfterGrace(deadline time.Time) {
 }
 
 func (g *Gateway) notifyDemandChange() {
+	g.notifyMu.Lock()
+	defer g.notifyMu.Unlock()
+
 	demand := g.Demand()
 	g.m.demand.Set(float64(demand))
 	active := demand > 0
@@ -419,12 +424,14 @@ func (g *Gateway) notifyDemandChange() {
 
 func (g *Gateway) subscribeDemand() (<-chan bool, func()) {
 	ch := make(chan bool, 1)
+	g.notifyMu.Lock()
 	g.subMu.Lock()
 	ch <- g.Demand() > 0
 	id := g.nextSubscriber
 	g.nextSubscriber++
 	g.subscribers[id] = ch
 	g.subMu.Unlock()
+	g.notifyMu.Unlock()
 	var once sync.Once
 	return ch, func() {
 		once.Do(func() {
