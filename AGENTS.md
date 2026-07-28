@@ -71,7 +71,7 @@ Review generated diffs and reject unrelated churn. Helm templates are not genera
 
 ## Architecture invariants
 
-One `LLMService` normally owns a backend Deployment and Service, gateway Deployment and public Service, optional cache and prewarm resources, a KEDA `ScaledObject`, and an internal ExternalScaler Service.
+One `LLMService` normally owns a backend Deployment and Service, gateway Deployment and public Service, optional cache and prewarm resources, a KEDA `ScaledObject`, and an internal ExternalScaler Service. Multiple gateways also use one aggregate-scaler Deployment.
 
 Preserve these rules:
 
@@ -83,7 +83,7 @@ Preserve these rules:
 - Watch owned resources through controller-runtime instead of periodic requeues.
 - Update status only when changed, use `metav1.Condition`, and set `ObservedGeneration`.
 - Backend builders never set replicas; KEDA owns the backend `0..N` count.
-- Gateway and backend replicas remain separate. Exactly one gateway is supported until demand aggregation exists.
+- Gateway and backend replicas remain separate. Multiple gateways publish sequenced, expiring demand reports to the per-service aggregate scaler; do not bypass that path.
 - Vendor behavior stays behind `backend.BackendAdapter`; shared vLLM behavior stays common.
 - Keep external CRDs unstructured unless a typed dependency is an explicit design decision.
 

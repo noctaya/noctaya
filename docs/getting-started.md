@@ -54,7 +54,9 @@ KEDA must expose its API before you create an `LLMService`:
 kubectl get crd scaledobjects.keda.sh
 ```
 
-Noctaya uses KEDA External Push for immediate cold activation and currently supports one gateway replica per `LLMService`; see [Scaling and failure behavior](architecture.md#scaling-and-failure-behavior).
+Noctaya uses KEDA External Push for immediate cold activation. The chart defaults to one gateway; set `gateway.replicas` above one when gateway availability is required. Noctaya then creates a per-service demand aggregator so KEDA receives the complete signal. See [Scaling and failure behavior](architecture.md#scaling-and-failure-behavior).
+
+For example, add `--set gateway.replicas=2` to the Noctaya Helm installation command to run two gateways per `LLMService`.
 
 ## 4. Select a profile
 
@@ -112,6 +114,8 @@ Expected state:
 - `LLMService` phase: `ScaledToZero`;
 - backend Deployment: `0` replicas; and
 - gateway Deployment: `1` replica.
+
+If Noctaya was installed with `--set gateway.replicas=2`, the gateway Deployment has two replicas and an additional `qwen2-5-7b-a10-scaler` Deployment aggregates their demand.
 
 ## 7. Send a request
 

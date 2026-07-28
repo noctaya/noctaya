@@ -46,10 +46,11 @@ The API group is `serving.noctaya.io/v1alpha1`.
 |---|---|
 | Operator (`internal/controller`) | Selects a runtime and reconciles the per-model Kubernetes resources |
 | Backend layer (`internal/backend`) | Renders common vLLM resources; thin adapters translate NVIDIA or Ascend details |
-| Gateway (`internal/gateway`) | Provides the stable OpenAI-compatible endpoint, bounded admission, readiness-aware proxying, drain, demand metrics, and KEDA ExternalScaler |
+| Gateway (`internal/gateway`) | Provides the stable OpenAI-compatible endpoint, bounded admission, readiness-aware proxying, drain, and local demand |
+| Aggregate scaler (`internal/gateway`) | Combines demand from multiple gateways and exposes one KEDA ExternalScaler endpoint |
 | KEDA | Reads demand and owns backend replicas; it is required for `LLMService` scaling but installed independently |
 
-Each `LLMService` produces a backend Deployment and Service, a gateway Deployment and public Service, an internal scaler Service, a KEDA `ScaledObject`, and—when requested—cache and prewarm resources. The operator deliberately omits backend `replicas`; KEDA owns that field.
+Each `LLMService` produces a backend Deployment and Service, a gateway Deployment and public Service, an internal scaler Service, a KEDA `ScaledObject`, and—when requested—cache and prewarm resources. When more than one gateway is configured, it also produces one aggregate-scaler Deployment. The operator deliberately omits backend `replicas`; KEDA owns that field.
 
 ```mermaid
 flowchart TB
@@ -57,7 +58,8 @@ flowchart TB
   runtime["InferenceRuntime"]
   operator["Noctaya operator"]
   client(["Inference client"])
-  gateway["Gateway<br/>always available"]
+  gateway["Gateway<br/>1..N replicas"]
+  scaler["ExternalScaler<br/>demand aggregator"]
   backend["Model backend<br/>0..N replicas"]
   cache[("Cache / prewarm")]
   scaled["ScaledObject"]
@@ -66,13 +68,15 @@ flowchart TB
   llm --> operator
   runtime --> operator
   operator --> gateway
+  operator --> scaler
   operator --> backend
   operator -.-> cache
   operator --> scaled
   client -->|"OpenAI API"| gateway
   gateway -->|"forward when Ready"| backend
   cache -.->|"load weights"| backend
-  gateway <-.->|"ExternalScaler gRPC"| keda
+  gateway -->|"local demand"| scaler
+  scaler <-.->|"ExternalScaler gRPC"| keda
   scaled --> keda
   keda -->|"own replicas"| backend
 ```
@@ -90,13 +94,15 @@ flowchart TB
 
 Noctaya and KEDA are installed independently. The operator may start before KEDA, but the KEDA `ScaledObject` CRD must exist before an `LLMService` is deployed. Otherwise reconciliation reports `AutoscalingReady=False` and does not create the model backend.
 
-Noctaya uses KEDA External Push. `StreamIsActive` sends the initial `0→1` activation without waiting for a polling interval. KEDA still reads `IsActive` and `GetMetrics` periodically for recovery and metric-based `1→N` scale-out. `/noctaya/queue` remains a diagnostic view of effective demand; KEDA does not consume it.
+Noctaya uses KEDA External Push. `StreamIsActive` sends the initial `0→1` activation without waiting for a polling interval. KEDA still reads `IsActive` and `GetMetrics` periodically for recovery and metric-based `1→N` scale-out. `/noctaya/queue` remains a diagnostic view of one gateway's effective demand; KEDA does not consume it.
 
-Exactly one gateway replica is supported because demand is not yet aggregated across gateway Pods. The operator and Helm chart reject any other replica count.
+With one gateway replica, the ExternalScaler remains co-located in that gateway. With multiple replicas, the operator creates one lightweight aggregate-scaler Deployment. Each gateway publishes its complete demand on transitions and every two seconds. Reports carry a process-unique identity and increasing sequence number; the scaler sums the newest report from each member.
+
+A graceful gateway shutdown withdraws its report. A disconnected or replaced member expires after ten seconds, which may briefly overestimate demand but cannot leave a permanent activation lease. Surviving members retain their demand, and replacement gateways register independently. The aggregator is memory-only; after it is replaced, gateway heartbeats rebuild the aggregate.
 
 Cold admission creates an activation lease independent of the client connection. Demand remains active until the backend becomes Ready, followed by a short retry grace, or until `activationTimeout` expires. If a load fails, that lease expires instead of signaling forever; a later cold request may start a new lease.
 
-The scaler Service is cluster-internal, uses plaintext gRPC on port `9090`, and is not part of the public gateway Service. Use a NetworkPolicy when tenant isolation requires it.
+The scaler Service is cluster-internal and is not part of the public gateway Service. KEDA uses plaintext gRPC on port `9090`; multiple gateways publish demand over HTTP on port `9091`. Use a NetworkPolicy when tenant isolation requires it.
 
 ## Caching
 

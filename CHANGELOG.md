@@ -6,10 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- Added per-`LLMService` demand aggregation for multiple gateway replicas. Gateways publish sequenced snapshots and heartbeats; disconnected members expire so replacement Pods cannot leave permanent demand behind.
+
 ### Changed
 - Made KEDA External Push the sole scaler transport. Cold `0→1` activation is streamed immediately, while periodic metric reads remain responsible for recovery and `1→N` scale-out.
 - Removed the `gateway.scalerMode`, `--scaler-mode`, and dual-mode E2E configuration surfaces. Remove stored `gateway.scalerMode` values before upgrading the Helm release.
-- Restricted gateway replicas to one until demand aggregation is implemented.
+- Allowed `gateway.replicas` values greater than one. A single gateway keeps the co-located ExternalScaler path; multiple gateways use one lightweight aggregate-scaler Deployment.
 
 ### Fixed
 - Serialized gateway demand notifications so concurrent transitions cannot publish stale scaler state.
@@ -18,6 +21,7 @@ All notable changes to this project are documented here. The format is based on
 
 ### Tests
 - Changed the Kind lifecycle to prove activation occurs before a deliberately extended fallback polling interval.
+- Extended the lifecycle to two gateways and verified activation, scale-out, scale-down, and gateway replacement through the aggregate demand path.
 
 ## [0.4.0-alpha.1] - 2026-07-25
 

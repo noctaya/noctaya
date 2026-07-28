@@ -8,7 +8,7 @@ Noctaya is an alpha Kubernetes control plane for internal, development, and stag
 
 - Cold starts can take seconds to minutes; latency-sensitive models should use `scaling.min: 1`.
 - The gateway has no built-in authentication and must remain behind a trusted boundary.
-- External-push mode supports one gateway replica because demand is not yet aggregated.
+- Multiple gateways use one replaceable per-model demand aggregator; disruption protection and broader failure-injection coverage are still in progress.
 - Node-local caches are per node; shared and immutable model distribution is not yet available.
 - Hardware support claims remain specific to the validated device, topology, driver, runtime, and image stack.
 
@@ -41,7 +41,7 @@ The v0.4.0 goal is to make Noctaya safer and more predictable for controlled, si
 
 ### Availability and recovery
 
-- Support multiple gateway replicas without losing the complete External Push demand signal.
+- Harden aggregate-scaler replacement and network-failure recovery with broader failure-injection coverage.
 - Add disruption and placement controls, including a `PodDisruptionBudget` and topology-aware spreading.
 - Validate operator leader-election failover and add soak and failure-injection coverage for gateway, operator, backend, and node replacement.
 

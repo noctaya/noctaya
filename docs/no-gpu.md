@@ -48,6 +48,7 @@ The suite verifies:
 - idle backend scale-to-zero;
 - cold activation and streaming completion;
 - concurrent scale-out through `0 → 1 → 2 → 0`;
+- aggregate demand from two gateways during gateway replacement;
 - graceful drain of an active stream;
 - fast cold-start rejection with `503`; and
 - push activation before the fallback polling interval.
