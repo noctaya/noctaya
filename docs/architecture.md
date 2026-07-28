@@ -46,10 +46,10 @@ The API group is `serving.noctaya.io/v1alpha1`.
 |---|---|
 | Operator (`internal/controller`) | Selects a runtime and reconciles the per-model Kubernetes resources |
 | Backend layer (`internal/backend`) | Renders common vLLM resources; thin adapters translate NVIDIA or Ascend details |
-| Gateway (`internal/gateway`) | Provides the stable OpenAI-compatible endpoint, bounded admission, readiness-aware proxying, drain, and queue metrics |
+| Gateway (`internal/gateway`) | Provides the stable OpenAI-compatible endpoint, bounded admission, readiness-aware proxying, drain, demand metrics, and KEDA ExternalScaler |
 | KEDA | Reads demand and owns backend replicas; it is required for `LLMService` scaling but installed independently |
 
-Each `LLMService` produces a backend Deployment and Service, a gateway Deployment and Service, a KEDA `ScaledObject`, and—when requested—cache and prewarm resources. External-push mode also creates an internal scaler Service. The operator deliberately omits backend `replicas`; KEDA owns that field.
+Each `LLMService` produces a backend Deployment and Service, a gateway Deployment and public Service, an internal scaler Service, a KEDA `ScaledObject`, and—when requested—cache and prewarm resources. The operator deliberately omits backend `replicas`; KEDA owns that field.
 
 ```mermaid
 flowchart TB
@@ -72,13 +72,10 @@ flowchart TB
   client -->|"OpenAI API"| gateway
   gateway -->|"forward when Ready"| backend
   cache -.->|"load weights"| backend
-  keda -.->|"metrics-api poll"| gateway
-  gateway -.->|"external-push activation"| keda
+  gateway <-.->|"ExternalScaler gRPC"| keda
   scaled --> keda
   keda -->|"own replicas"| backend
 ```
-
-The two dashed gateway–KEDA paths are alternative scaler transports, not concurrent requirements.
 
 ## Request lifecycle
 
@@ -91,15 +88,15 @@ The two dashed gateway–KEDA paths are alternative scaler transports, not concu
 
 ## Scaling and failure behavior
 
-Noctaya and KEDA are installed independently. The operator may start before KEDA, but the KEDA `ScaledObject` CRD must exist before an `LLMService` is deployed.
+Noctaya and KEDA are installed independently. The operator may start before KEDA, but the KEDA `ScaledObject` CRD must exist before an `LLMService` is deployed. Otherwise reconciliation reports `AutoscalingReady=False` and does not create the model backend.
 
-`metrics-api` is the default and polls `/noctaya/queue`. `external-push` streams activation events to KEDA and removes the polling delay from the initial signal. Select it with `--scaler-mode=external-push` or `gateway.scalerMode=external-push`.
+Noctaya uses KEDA External Push. `StreamIsActive` sends the initial `0→1` activation without waiting for a polling interval. KEDA still reads `IsActive` and `GetMetrics` periodically for recovery and metric-based `1→N` scale-out. `/noctaya/queue` remains a diagnostic view of effective demand; KEDA does not consume it.
 
-External-push requires exactly one gateway replica because demand is not yet aggregated across gateway Pods. The operator rejects any other replica count in this mode.
+Exactly one gateway replica is supported because demand is not yet aggregated across gateway Pods. The operator and Helm chart reject any other replica count.
 
 Cold admission creates an activation lease independent of the client connection. Demand remains active until the backend becomes Ready, followed by a short retry grace, or until `activationTimeout` expires. If a load fails, that lease expires instead of signaling forever; a later cold request may start a new lease.
 
-The external scaler Service is cluster-internal, uses plaintext gRPC on port `9090`, and is not part of the public gateway Service. Use a NetworkPolicy when tenant isolation requires it.
+The scaler Service is cluster-internal, uses plaintext gRPC on port `9090`, and is not part of the public gateway Service. Use a NetworkPolicy when tenant isolation requires it.
 
 ## Caching
 

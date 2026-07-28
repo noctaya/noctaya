@@ -54,7 +54,7 @@ KEDA must expose its API before you create an `LLMService`:
 kubectl get crd scaledobjects.keda.sh
 ```
 
-Noctaya defaults to the polling `metrics-api` scaler. The optional `external-push` mode removes the initial polling delay and requires one gateway replica; see [Scaling and failure behavior](architecture.md#scaling-and-failure-behavior).
+Noctaya uses KEDA External Push for immediate cold activation and currently supports one gateway replica per `LLMService`; see [Scaling and failure behavior](architecture.md#scaling-and-failure-behavior).
 
 ## 4. Select a profile
 

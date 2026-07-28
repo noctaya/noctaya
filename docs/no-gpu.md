@@ -26,25 +26,19 @@ make lint
 
 ## Run the scale-to-zero E2E suite
 
-Test the default polling scaler:
+Run the External Push lifecycle:
 
 ```bash
 make test-e2e
 ```
 
-Test the external-push scaler:
-
-```bash
-make test-e2e E2E_SCALER_MODE=external-push
-```
-
-Each command:
+The command:
 
 1. creates the disposable Kind cluster `noctaya-test-e2e`;
 2. uses a dedicated kubeconfig;
 3. installs KEDA `2.20.1`;
 4. builds and loads the operator, gateway, and stub images;
-5. runs the selected scaler-mode suite; and
+5. runs the External Push lifecycle suite; and
 6. deletes the cluster and kubeconfig on exit.
 
 The runner refuses to reuse an existing cluster with that name or overwrite its kubeconfig.
@@ -56,9 +50,9 @@ The suite verifies:
 - concurrent scale-out through `0 → 1 → 2 → 0`;
 - graceful drain of an active stream;
 - fast cold-start rejection with `503`; and
-- the selected KEDA scaler transport.
+- push activation before the fallback polling interval.
 
-CI runs both scaler modes through `.github/workflows/test-e2e.yml`.
+CI runs the same lifecycle through `.github/workflows/test-e2e.yml`.
 
 ## Use Podman
 
@@ -67,8 +61,6 @@ Select Podman for both the image build and the Kind provider:
 ```bash
 KIND_EXPERIMENTAL_PROVIDER=podman make test-e2e CONTAINER_TOOL=podman
 ```
-
-Add `E2E_SCALER_MODE=external-push` to the same command to test external-push.
 
 ## CPU vLLM stub
 

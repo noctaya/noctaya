@@ -71,7 +71,7 @@ Review generated diffs and reject unrelated churn. Helm templates are not genera
 
 ## Architecture invariants
 
-One `LLMService` normally owns a backend Deployment and Service, gateway Deployment and public Service, optional cache and prewarm resources, a KEDA `ScaledObject`, and an internal scaler Service when external-push is enabled.
+One `LLMService` normally owns a backend Deployment and Service, gateway Deployment and public Service, optional cache and prewarm resources, a KEDA `ScaledObject`, and an internal ExternalScaler Service.
 
 Preserve these rules:
 
@@ -83,7 +83,7 @@ Preserve these rules:
 - Watch owned resources through controller-runtime instead of periodic requeues.
 - Update status only when changed, use `metav1.Condition`, and set `ObservedGeneration`.
 - Backend builders never set replicas; KEDA owns the backend `0..N` count.
-- Gateway and backend replicas remain separate. External-push requires one gateway until demand aggregation exists.
+- Gateway and backend replicas remain separate. Exactly one gateway is supported until demand aggregation exists.
 - Vendor behavior stays behind `backend.BackendAdapter`; shared vLLM behavior stays common.
 - Keep external CRDs unstructured unless a typed dependency is an explicit design decision.
 
@@ -97,7 +97,7 @@ Update the closest tests and follow the package's existing `testing` or Ginkgo/G
 
 ### Gateway and scaling
 
-Cover affected success, timeout, rejection, streaming, cancellation, and drain paths. If behavior crosses KEDA activation or scale-down, run both metrics-api and external-push E2E modes.
+Cover affected success, timeout, rejection, streaming, cancellation, and drain paths. If behavior crosses KEDA activation or scale-down, run the External Push E2E lifecycle.
 
 ### Packaging and documentation
 
@@ -123,8 +123,7 @@ Use the Go version in `go.mod`. Prefer the closest package test while iterating;
 | `make lint` | Run the pinned linter |
 | `make lint-fix` | Apply supported fixes; inspect every edit |
 | `make test-docs` | Install pinned Node dependencies and build Docusaurus |
-| `make test-e2e` | Run the metrics-api lifecycle on an isolated Kind cluster |
-| `make test-e2e E2E_SCALER_MODE=external-push` | Run the ExternalScaler lifecycle |
+| `make test-e2e` | Run the External Push lifecycle on an isolated Kind cluster |
 
 E2E commands may target only the disposable Kind cluster owned by the runner. Confirm the kube-context and never target development, staging, or production.
 

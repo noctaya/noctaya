@@ -41,7 +41,7 @@ The v0.4.0 goal is to make Noctaya safer and more predictable for controlled, si
 
 ### Availability and recovery
 
-- Support multiple gateway replicas without losing the complete demand signal in external-push mode.
+- Support multiple gateway replicas without losing the complete External Push demand signal.
 - Add disruption and placement controls, including a `PodDisruptionBudget` and topology-aware spreading.
 - Validate operator leader-election failover and add soak and failure-injection coverage for gateway, operator, backend, and node replacement.
 

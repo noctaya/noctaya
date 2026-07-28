@@ -24,7 +24,7 @@ Capture the following before testing:
 - firmware, driver, vendor runtime, device-plugin version, Kubernetes resource name, and node labels;
 - container runtime, Kubernetes, Helm, KEDA, and any optional scheduler or sharing integration;
 - Noctaya operator, gateway, and inference-runtime images, including tags and digests;
-- model identifier and revision, cache configuration, scaler mode, and replica limits;
+- model identifier and revision, cache configuration, External Push settings, and replica limits;
 - the exact `InferenceRuntime` and `LLMService` manifests used.
 
 Tags alone are not reproducible evidence. Record image digests whenever the registry exposes them.

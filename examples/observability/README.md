@@ -38,7 +38,7 @@ In Grafana, import `grafana/noctaya-overview.json` and select the Prometheus dat
 | `noctaya_gateway_requests_total` | Counter | Responses by HTTP status code |
 | `noctaya_gateway_rejections_total` | Counter | Rejections by reason |
 | `noctaya_gateway_activation_wait_seconds` | Histogram | Time spent waiting for backend readiness |
-| `noctaya_gateway_scaler_streams` | Gauge | Connected external-push scaler streams |
+| `noctaya_gateway_scaler_streams` | Gauge | Connected External Push scaler streams |
 | `noctaya_gateway_activation_events_total` | Counter | Inactive-to-active demand transitions |
 
 Backend metrics depend on the selected `InferenceRuntime`.

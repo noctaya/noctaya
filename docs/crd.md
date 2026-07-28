@@ -69,7 +69,7 @@ Cache PVCs and prewarm Jobs are create-once resources. Delete the Job to prewarm
 | `status.resolvedRuntime` | Name of the `InferenceRuntime` selected by the controller. |
 | `status.replicas` | Number of ready backend replicas. Gateway replicas are not included. |
 | `status.endpointURL` | In-cluster OpenAI-compatible base URL, ending in `/v1`. |
-| `status.conditions` | Kubernetes conditions. Noctaya maintains a `Ready` condition with `ObservedGeneration` set to the reconciled generation. |
+| `status.conditions` | Kubernetes conditions. `Ready` reports serving availability; `AutoscalingReady` reports whether the required KEDA External Push resources are configured. Both use the reconciled `ObservedGeneration`. |
 
 ## InferenceRuntime
 

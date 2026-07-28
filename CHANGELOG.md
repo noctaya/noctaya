@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- Made KEDA External Push the sole scaler transport. Cold `0→1` activation is streamed immediately, while periodic metric reads remain responsible for recovery and `1→N` scale-out.
+- Removed the `gateway.scalerMode`, `--scaler-mode`, and dual-mode E2E configuration surfaces. Remove stored `gateway.scalerMode` values before upgrading the Helm release.
+- Restricted gateway replicas to one until demand aggregation is implemented.
+
+### Fixed
+- Serialized gateway demand notifications so concurrent transitions cannot publish stale scaler state.
+- Made a missing KEDA `ScaledObject` CRD an explicit reconciliation failure and added the `AutoscalingReady` condition.
+- Added signal-aware HTTP and gRPC shutdown to the per-model gateway.
+
+### Tests
+- Changed the Kind lifecycle to prove activation occurs before a deliberately extended fallback polling interval.
+
 ## [0.4.0-alpha.1] - 2026-07-25
 
 This is the first Noctaya-branded prerelease. It publishes the v0.3.0 functional baseline under
