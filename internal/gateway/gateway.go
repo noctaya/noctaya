@@ -45,11 +45,15 @@ const (
 	EnvActivationTimeout = "NOCTAYA_ACTIVATION_TIMEOUT"
 	EnvListenAddr        = "NOCTAYA_LISTEN_ADDR"
 	EnvScalerListenAddr  = "NOCTAYA_SCALER_LISTEN_ADDR"
+	EnvAggregatorAddr    = "NOCTAYA_AGGREGATOR_LISTEN_ADDR"
+	EnvDemandAggregator  = "NOCTAYA_DEMAND_AGGREGATOR_URL"
+	EnvGatewayID         = "NOCTAYA_GATEWAY_ID"
 	EnvColdStartMode     = "NOCTAYA_COLDSTART_MODE"
 	EnvHeartbeatInterval = "NOCTAYA_HEARTBEAT_INTERVAL"
 
 	DefaultListenAddr       = ":8080"
 	DefaultScalerListenAddr = ":9090"
+	DefaultAggregatorAddr   = ":9091"
 	QueuePath               = "/noctaya/queue"
 	MetricsPath             = "/metrics"
 
@@ -101,6 +105,7 @@ type metrics struct {
 	coldStart        prometheus.Histogram
 	scalerStreams    prometheus.Gauge
 	activationEvents prometheus.Counter
+	demandReports    *prometheus.CounterVec
 }
 
 func newMetrics() *metrics {
@@ -109,7 +114,7 @@ func newMetrics() *metrics {
 		pending: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "noctaya_gateway_pending", Help: "Requests admitted and waiting or in flight."}),
 		demand: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "noctaya_gateway_demand", Help: "Effective queue demand reported to KEDA, including an activation lease floor."}),
+			Name: "noctaya_gateway_demand", Help: "Local effective queue demand, including an activation lease floor."}),
 		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "noctaya_gateway_requests_total", Help: "Responses by HTTP status code."}, []string{"code"}),
 		rejections: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -121,8 +126,19 @@ func newMetrics() *metrics {
 			Name: "noctaya_gateway_scaler_streams", Help: "Connected KEDA External Push activation streams."}),
 		activationEvents: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "noctaya_gateway_activation_events_total", Help: "Inactive-to-active effective demand transitions."}),
+		demandReports: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "noctaya_gateway_demand_reports_total", Help: "Demand reports sent to the aggregate scaler by result."}, []string{"result"}),
 	}
-	m.registry.MustRegister(m.pending, m.demand, m.requests, m.rejections, m.coldStart, m.scalerStreams, m.activationEvents)
+	m.registry.MustRegister(
+		m.pending,
+		m.demand,
+		m.requests,
+		m.rejections,
+		m.coldStart,
+		m.scalerStreams,
+		m.activationEvents,
+		m.demandReports,
+	)
 	return m
 }
 
@@ -144,11 +160,8 @@ type Gateway struct {
 	readyGraceUntil time.Time
 	leaseWatcher    bool
 
-	notifyMu       sync.Mutex
-	subMu          sync.Mutex
-	subscribers    map[uint64]chan bool
-	nextSubscriber uint64
-	lastActive     bool
+	notifyMu sync.Mutex
+	demands  demandSubscriptions
 }
 
 type activationWaitResult int
@@ -186,16 +199,16 @@ func New(cfg Config) (*Gateway, error) {
 	proxy.FlushInterval = -1 // flush every write so tokens stream as they arrive
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Gateway{
-		cfg:         cfg,
-		backend:     u,
-		proxy:       proxy,
-		sem:         make(chan struct{}, cfg.MaxQueue),
-		m:           newMetrics(),
-		probe:       &http.Client{Timeout: 2 * time.Second},
-		now:         time.Now,
-		ctx:         ctx,
-		cancel:      cancel,
-		subscribers: make(map[uint64]chan bool),
+		cfg:     cfg,
+		backend: u,
+		proxy:   proxy,
+		sem:     make(chan struct{}, cfg.MaxQueue),
+		m:       newMetrics(),
+		probe:   &http.Client{Timeout: 2 * time.Second},
+		now:     time.Now,
+		ctx:     ctx,
+		cancel:  cancel,
+		demands: newDemandSubscriptions(),
 	}, nil
 }
 
@@ -217,6 +230,14 @@ func (g *Gateway) Demand() int64 {
 }
 
 func (g *Gateway) Close() { g.cancel() }
+
+func (g *Gateway) scalerStreamConnected() { g.m.scalerStreams.Inc() }
+
+func (g *Gateway) scalerStreamDisconnected() { g.m.scalerStreams.Dec() }
+
+func (g *Gateway) recordDemandReport(result string) {
+	g.m.demandReports.WithLabelValues(result).Inc()
+}
 
 func (g *Gateway) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -398,48 +419,16 @@ func (g *Gateway) notifyDemandChange() {
 
 	demand := g.Demand()
 	g.m.demand.Set(float64(demand))
-	active := demand > 0
-	g.subMu.Lock()
-	if active == g.lastActive {
-		g.subMu.Unlock()
-		return
-	}
-	g.lastActive = active
-	if active {
+	if g.demands.publish(demand) {
 		g.m.activationEvents.Inc()
 	}
-	for _, ch := range g.subscribers {
-		select {
-		case ch <- active:
-		default:
-			select {
-			case <-ch:
-			default:
-			}
-			ch <- active
-		}
-	}
-	g.subMu.Unlock()
 }
 
-func (g *Gateway) subscribeDemand() (<-chan bool, func()) {
-	ch := make(chan bool, 1)
+func (g *Gateway) subscribeDemand() (<-chan int64, func()) {
 	g.notifyMu.Lock()
-	g.subMu.Lock()
-	ch <- g.Demand() > 0
-	id := g.nextSubscriber
-	g.nextSubscriber++
-	g.subscribers[id] = ch
-	g.subMu.Unlock()
+	ch, unsubscribe := g.demands.subscribe(g.Demand())
 	g.notifyMu.Unlock()
-	var once sync.Once
-	return ch, func() {
-		once.Do(func() {
-			g.subMu.Lock()
-			delete(g.subscribers, id)
-			g.subMu.Unlock()
-		})
-	}
+	return ch, unsubscribe
 }
 
 // holdWithHeartbeat commits a 200 SSE response and emits keepalive comments until the

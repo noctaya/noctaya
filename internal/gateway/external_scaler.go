@@ -29,38 +29,53 @@ import (
 
 const scalerMetricName = "pending"
 
-type externalScalerServer struct {
-	externalscaler.UnimplementedExternalScalerServer
-	gateway *Gateway
+type demandSource interface {
+	Demand() int64
+	subscribeDemand() (<-chan int64, func())
+	scalerStreamConnected()
+	scalerStreamDisconnected()
 }
 
-func RegisterExternalScalerServer(registrar grpc.ServiceRegistrar, gateway *Gateway) {
-	externalscaler.RegisterExternalScalerServer(registrar, &externalScalerServer{gateway: gateway})
+type externalScalerServer struct {
+	externalscaler.UnimplementedExternalScalerServer
+	source demandSource
+}
+
+func RegisterExternalScalerServer(registrar grpc.ServiceRegistrar, source demandSource) {
+	externalscaler.RegisterExternalScalerServer(registrar, &externalScalerServer{source: source})
 }
 
 func (s *externalScalerServer) IsActive(_ context.Context, ref *externalscaler.ScaledObjectRef) (*externalscaler.IsActiveResponse, error) {
 	if _, _, err := parseScalerMetadata(ref); err != nil {
 		return nil, err
 	}
-	return &externalscaler.IsActiveResponse{Result: s.gateway.Demand() > 0}, nil
+	return &externalscaler.IsActiveResponse{Result: s.source.Demand() > 0}, nil
 }
 
 func (s *externalScalerServer) StreamIsActive(ref *externalscaler.ScaledObjectRef, stream externalscaler.ExternalScaler_StreamIsActiveServer) error {
 	if _, _, err := parseScalerMetadata(ref); err != nil {
 		return err
 	}
-	updates, unsubscribe := s.gateway.subscribeDemand()
+	updates, unsubscribe := s.source.subscribeDemand()
 	defer unsubscribe()
-	s.gateway.m.scalerStreams.Inc()
-	defer s.gateway.m.scalerStreams.Dec()
+	s.source.scalerStreamConnected()
+	defer s.source.scalerStreamDisconnected()
+	var sent bool
+	var lastActive bool
 	for {
 		select {
 		case <-stream.Context().Done():
 			return stream.Context().Err()
-		case active := <-updates:
+		case demand := <-updates:
+			active := demand > 0
+			if sent && active == lastActive {
+				continue
+			}
 			if err := stream.Send(&externalscaler.IsActiveResponse{Result: active}); err != nil {
 				return err
 			}
+			sent = true
+			lastActive = active
 		}
 	}
 }
@@ -89,7 +104,7 @@ func (s *externalScalerServer) GetMetrics(_ context.Context, req *externalscaler
 	}
 	return &externalscaler.GetMetricsResponse{MetricValues: []*externalscaler.MetricValue{{
 		MetricName:       metricName,
-		MetricValueFloat: float64(s.gateway.Demand()),
+		MetricValueFloat: float64(s.source.Demand()),
 	}}}, nil
 }
 

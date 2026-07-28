@@ -51,9 +51,29 @@ func scalerRef() *externalscaler.ScaledObjectRef {
 
 func newScalerClient(t *testing.T, gw *gateway.Gateway) externalscaler.ExternalScalerClient {
 	t.Helper()
+	return newScalerClientWithRegistrar(t, func(server *grpc.Server) {
+		gateway.RegisterExternalScalerServer(server, gw)
+	})
+}
+
+func newAggregatorScalerClient(
+	t *testing.T,
+	aggregator *gateway.DemandAggregator,
+) externalscaler.ExternalScalerClient {
+	t.Helper()
+	return newScalerClientWithRegistrar(t, func(server *grpc.Server) {
+		gateway.RegisterExternalScalerServer(server, aggregator)
+	})
+}
+
+func newScalerClientWithRegistrar(
+	t *testing.T,
+	register func(*grpc.Server),
+) externalscaler.ExternalScalerClient {
+	t.Helper()
 	listener := bufconn.Listen(bufferSize)
 	server := grpc.NewServer()
-	gateway.RegisterExternalScalerServer(server, gw)
+	register(server)
 	go func() { _ = server.Serve(listener) }()
 	conn, err := grpc.NewClient("passthrough:///noctaya-scaler",
 		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }),
@@ -65,6 +85,36 @@ func newScalerClient(t *testing.T, gw *gateway.Gateway) externalscaler.ExternalS
 		_ = listener.Close()
 	})
 	return externalscaler.NewExternalScalerClient(conn)
+}
+
+func TestExternalScalerReportsAggregateGatewayDemand(t *testing.T) {
+	g := NewWithT(t)
+	aggregator := gateway.NewDemandAggregator(gateway.DemandAggregatorConfig{})
+	server := httptest.NewServer(aggregator.Handler())
+	t.Cleanup(server.Close)
+	for _, report := range []string{
+		`{"memberID":"gateway-a","sequence":1,"demand":2}`,
+		`{"memberID":"gateway-b","sequence":1,"demand":3}`,
+	} {
+		response, err := http.Post(
+			server.URL+gateway.DemandReportPath,
+			"application/json",
+			strings.NewReader(report),
+		)
+		g.Expect(err).NotTo(HaveOccurred())
+		_ = response.Body.Close()
+		g.Expect(response.StatusCode).To(Equal(http.StatusNoContent))
+	}
+
+	client := newAggregatorScalerClient(t, aggregator)
+	active, err := client.IsActive(context.Background(), scalerRef())
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(active.GetResult()).To(BeTrue())
+	metrics, err := client.GetMetrics(context.Background(), &externalscaler.GetMetricsRequest{
+		ScaledObjectRef: scalerRef(), MetricName: "pending",
+	})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(metrics.GetMetricValues()[0].GetMetricValueFloat()).To(Equal(float64(5)))
 }
 
 func TestExternalScalerUnaryContract(t *testing.T) {

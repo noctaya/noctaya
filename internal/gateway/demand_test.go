@@ -30,8 +30,8 @@ func TestConcurrentDemandNotificationsConverge(t *testing.T) {
 
 	updates, unsubscribe := gateway.subscribeDemand()
 	t.Cleanup(unsubscribe)
-	if active := <-updates; active {
-		t.Fatal("initial demand is active")
+	if demand := <-updates; demand != 0 {
+		t.Fatalf("initial demand = %d, want 0", demand)
 	}
 
 	const (
@@ -55,17 +55,14 @@ func TestConcurrentDemandNotificationsConverge(t *testing.T) {
 	if demand := gateway.Demand(); demand != 0 {
 		t.Fatalf("Demand() = %d, want 0", demand)
 	}
-	gateway.subMu.Lock()
-	lastActive := gateway.lastActive
-	gateway.subMu.Unlock()
-	if lastActive {
-		t.Fatal("published demand did not converge to inactive")
+	if published := gateway.demands.current(); published != 0 {
+		t.Fatalf("published demand = %d, want 0", published)
 	}
 
 	select {
-	case active := <-updates:
-		if active {
-			t.Fatal("last queued demand update is active")
+	case demand := <-updates:
+		if demand != 0 {
+			t.Fatalf("last queued demand = %d, want 0", demand)
 		}
 	default:
 	}
