@@ -29,9 +29,12 @@ Keep tutorials in the appropriate document under `docs/`, not in this guide.
 |---|---|
 | `cmd/` | Operator and gateway entry points |
 | `api/v1alpha1/` | CRD types and Kubebuilder markers |
-| `internal/controller/` | Reconcilers and envtest coverage |
-| `internal/backend/` | Shared builders, registry, and vendor adapters |
-| `internal/gateway/` | Admission, activation, proxying, draining, scaler, and metrics |
+| `internal/controller/llmservice/` | Serving lifecycle reconciler and envtest coverage |
+| `internal/controller/inferenceruntime/` | Passive runtime controller |
+| `internal/backend/runtime/` | Runtime contracts and shared vLLM rendering |
+| `internal/backend/resources/` | Kubernetes resource builders and rendering tests |
+| `internal/backend/{ascend,nvidia,registry}/` | Thin vendor adapters and built-in registration |
+| `internal/gateway/{proxy,scaler,demand}/` | Admission, routing, demand reporting, and External Push scaling |
 | `internal/model/` | Model URI resolution |
 | `config/` and `charts/noctaya/` | Kustomize and manually maintained Helm packaging |
 | `examples/` | Device profiles and optional integrations |
@@ -79,12 +82,12 @@ Preserve these rules:
 - Mutable owned resources use server-side apply with field owner `noctaya-operator` and controller references.
 - Cache PVCs and prewarm Jobs are create-once because they contain immutable fields.
 - KEDA is required for scaling but installed independently. Never bundle it with the chart or import its Go SDK; its CRD must exist before an `LLMService` is deployed.
-- Monitoring remains outside reconciliation; optional resources belong in   `examples/observability/`.
+- Monitoring remains outside reconciliation; optional resources belong in `examples/observability/`.
 - Watch owned resources through controller-runtime instead of periodic requeues.
 - Update status only when changed, use `metav1.Condition`, and set `ObservedGeneration`.
 - Backend builders never set replicas; KEDA owns the backend `0..N` count.
 - Gateway and backend replicas remain separate. Multiple gateways publish sequenced, expiring demand reports to the per-service aggregate scaler; do not bypass that path.
-- Vendor behavior stays behind `backend.BackendAdapter`; shared vLLM behavior stays common.
+- Vendor behavior stays behind `internal/backend/runtime.BackendAdapter`; shared vLLM behavior stays common.
 - Keep external CRDs unstructured unless a typed dependency is an explicit design decision.
 
 When adding a vendor, add and test the adapter, register it, update the API enum, add a device-specific example, update documentation, and regenerate API artifacts. Rendering is not hardware evidence: claims must record the physical device, topology, driver and device plugin, runtime image, Noctaya version, commands, and results.

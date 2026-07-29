@@ -44,13 +44,14 @@ The API group is `serving.noctaya.io/v1alpha1`.
 
 | Component | Responsibility |
 |---|---|
-| Operator (`internal/controller`) | Selects a runtime and reconciles the per-model Kubernetes resources |
-| Backend layer (`internal/backend`) | Renders common vLLM resources; thin adapters translate NVIDIA or Ascend details |
-| Gateway (`internal/gateway`) | Provides the stable OpenAI-compatible endpoint, bounded admission, readiness-aware proxying, drain, and local demand |
-| Aggregate scaler (`internal/gateway`) | Combines demand from multiple gateways and exposes one KEDA ExternalScaler endpoint |
+| Operator (`internal/controller/llmservice`) | Selects a runtime and reconciles the per-model Kubernetes resources |
+| Runtime layer (`internal/backend/runtime`) | Renders vendor-neutral runtime pods; thin adapters translate accelerator details |
+| Resource layer (`internal/backend/resources`) | Builds owned Deployments, Services, autoscaling, cache, prewarm, and gateway objects |
+| Gateway (`internal/gateway/proxy`) | Provides the stable OpenAI-compatible endpoint, bounded admission, readiness-aware proxying, drain, and local demand |
+| Aggregate scaler (`internal/gateway/scaler`) | Combines demand from multiple gateways and exposes one KEDA ExternalScaler endpoint |
 | KEDA | Reads demand and owns backend replicas; it is required for `LLMService` scaling but installed independently |
 
-Each `LLMService` produces a backend Deployment and Service, a gateway Deployment and public Service, an internal scaler Service, a KEDA `ScaledObject`, and—when requested—cache and prewarm resources. When more than one gateway is configured, it also produces one aggregate-scaler Deployment. The operator deliberately omits backend `replicas`; KEDA owns that field.
+Each `LLMService` produces a backend Deployment and Service, a gateway Deployment and public Service, an internal scaler Service, a KEDA `ScaledObject`, and—when requested—cache and prewarm resources. When more than one gateway is configured, it also produces one aggregate-scaler Deployment and an internal authentication Secret. The operator deliberately omits backend `replicas`; KEDA owns that field.
 
 ```mermaid
 flowchart TB
@@ -96,13 +97,15 @@ Noctaya and KEDA are installed independently. The operator may start before KEDA
 
 Noctaya uses KEDA External Push. `StreamIsActive` sends the initial `0→1` activation without waiting for a polling interval. KEDA still reads `IsActive` and `GetMetrics` periodically for recovery and metric-based `1→N` scale-out. `/noctaya/queue` remains a diagnostic view of one gateway's effective demand; KEDA does not consume it.
 
-With one gateway replica, the ExternalScaler remains co-located in that gateway. With multiple replicas, the operator creates one lightweight aggregate-scaler Deployment. Each gateway publishes its complete demand on transitions and every two seconds. Reports carry a process-unique identity and increasing sequence number; the scaler sums the newest report from each member.
+With one gateway replica, the ExternalScaler remains co-located in that gateway. With multiple replicas, the operator creates one lightweight aggregate-scaler Deployment and a per-service authentication Secret. Each gateway publishes its complete demand on transitions and every two seconds. Reports carry the Secret token, a process-unique identity, and an increasing sequence number. The scaler bounds report concurrency, member count, and per-member demand before summing the newest report from each member.
 
 A graceful gateway shutdown withdraws its report. A disconnected or replaced member expires after ten seconds, which may briefly overestimate demand but cannot leave a permanent activation lease. Surviving members retain their demand, and replacement gateways register independently. The aggregator is memory-only; after it is replaced, gateway heartbeats rebuild the aggregate.
 
 Cold admission creates an activation lease independent of the client connection. Demand remains active until the backend becomes Ready, followed by a short retry grace, or until `activationTimeout` expires. If a load fails, that lease expires instead of signaling forever; a later cold request may start a new lease.
 
-The scaler Service is cluster-internal and is not part of the public gateway Service. KEDA uses plaintext gRPC on port `9090`; multiple gateways publish demand over HTTP on port `9091`. Use a NetworkPolicy when tenant isolation requires it.
+The controller watches the backend Deployment and Pods. `LLMService` conditions distinguish ordinary startup and scheduling delay from image-pull failures, repeated termination, OOM, crash loops, and a Deployment progress deadline. These observations do not change the gateway contract: the gateway has no Kubernetes credentials, does not replay requests, and returns a bounded `activation_timeout` if readiness does not arrive in time. See [Troubleshoot Noctaya](troubleshooting.md).
+
+The scaler Service is cluster-internal and is not part of the public gateway Service. KEDA connects to ExternalScaler gRPC on port `9090`; plaintext is the default, and an `LLMService` can reference existing server credentials and a KEDA authentication object to require mutual TLS. Multiple gateways publish authenticated demand to the aggregate scaler over HTTP on port `9091`. Certificate issuance, rotation, and network isolation remain cluster responsibilities; [`examples/security`](https://github.com/noctaya/noctaya/tree/main/examples/security) provides opt-in configuration.
 
 ## Caching
 
@@ -114,4 +117,4 @@ Cache PVCs and prewarm Jobs are create-once because their workload fields are im
 ## Observability
 
 The backend and gateway expose `/metrics` through Services with a stable `http` port and the `serving.noctaya.io/llmservice` discovery label. Noctaya does not manage a monitoring stack.
-[`examples/observability`](https://github.com/noctaya/noctaya/tree/main/examples/observability) provides an optional `ServiceMonitor` and Grafana dashboard.
+[`examples/observability`](https://github.com/noctaya/noctaya/tree/main/examples/observability) provides an optional `ServiceMonitor`, alert examples, and Grafana dashboard.

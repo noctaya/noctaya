@@ -13,7 +13,7 @@ Durations use Go/Kubernetes syntax such as `10s`, `2m`, and `5m`. Resource quant
 
 ## LLMService
 
-The schema requires `spec.model`. A working service also needs `spec.model.source.uri` and either `spec.runtime.name` or `spec.runtime.selector.vendor`; otherwise reconciliation reports `Degraded`.
+The schema requires `spec.model` and `spec.runtime`. Set exactly one model source (`source` or the reserved `catalogRef`) and exactly one runtime selection (`name` or `selector.vendor`).
 
 ### Model and runtime
 
@@ -22,8 +22,8 @@ The schema requires `spec.model`. A working service also needs `spec.model.sourc
 | `spec.model.source.uri` | string | Required for reconciliation | Supports `hf://` (`huggingface://` alias), `modelscope://`, and `pvc://<claim>[/<subpath>]` |
 | `spec.model.catalogRef` | string | **Not implemented** | Reserved for model-catalog lookup |
 | `spec.model.source.secretRef` | `LocalObjectReference` | **Not implemented** | Reserved for private-source credentials |
-| `spec.runtime.name` | string | Optional | Pins one cluster-scoped `InferenceRuntime`; takes precedence over a selector |
-| `spec.runtime.selector.vendor` | string array | Optional | Selects the first available vendor in order, then the highest-priority runtime |
+| `spec.runtime.name` | string | Exactly one runtime selection | Pins one cluster-scoped `InferenceRuntime` |
+| `spec.runtime.selector.vendor` | string array | Exactly one runtime selection; `nvidia` or `ascend` | Selects the first available vendor in order, then the highest-priority runtime |
 | `spec.runtime.argsOverride` | string array | Optional | Appends arguments after the runtime's templated arguments |
 
 A `pvc://` source mounts existing weights read-only at `/models` and performs no download. Use `cache.strategy: None` to avoid creating a separate cache PVC. Other URI schemes, including `oci://` and `s3://`, are not implemented.
@@ -40,11 +40,15 @@ A `pvc://` source mounts existing weights read-only at `/models` and performs no
 | `spec.scaling.max` | integer | `1`; minimum `1` | Maximum backend replicas; must be at least `min` |
 | `spec.scaling.metric` | string | `queueDepth`; `queueDepth` or `kvCacheUtil` | Only `queueDepth` is implemented |
 | `spec.scaling.target` | integer | `10`; minimum `1` | Queue-depth target per backend replica |
-| `spec.scaling.activationTimeout` | duration | `5m` | Bounds a cold request wait or reject-mode activation lease |
+| `spec.scaling.activationTimeout` | positive duration | `5m` | Bounds a cold request wait or reject-mode activation lease |
 | `spec.scaling.scaleDownStabilization` | duration | `5m`; whole seconds, `0s..1h` | HPA stabilization and KEDA cooldown before scale-to-zero |
-| `spec.scaling.drainTimeout` | duration | `2m` | Pre-stop drain time when the runtime enables `preStopDrain` |
+| `spec.scaling.drainTimeout` | non-negative duration | `2m` | Pre-stop drain time when the runtime enables `preStopDrain` |
+| `spec.scaling.externalScaler.tls.serverSecretName` | string | Required when `tls` is set | Mounts an existing Secret containing `tls.crt`, `tls.key`, and the client-verifying `ca.crt` into the ExternalScaler Pod |
+| `spec.scaling.externalScaler.tls.authenticationRef.name` | string | Required when `tls` is set | References the KEDA authentication object that supplies `caCert`, `tlsClientCert`, and `tlsClientKey` |
+| `spec.scaling.externalScaler.tls.authenticationRef.kind` | string | `TriggerAuthentication`; or `ClusterTriggerAuthentication` | Selects the KEDA authentication-object scope |
 
 KEDA owns backend replicas; `min` and `max` do not control gateway replicas.
+Noctaya consumes existing mTLS credentials but does not issue or rotate them. The server certificate must be valid for `<llmservice>-scaler.<namespace>.svc`.
 
 ### Cache and endpoint
 
@@ -56,7 +60,7 @@ KEDA owns backend replicas; `min` and `max` do not control gateway replicas.
 | `spec.cache.prewarm` | boolean | `false` | Creates one download Job for `hf://` or `modelscope://` with a persistent cache |
 | `spec.endpoint.openAICompatible` | boolean | `true` | Informational; the gateway currently always serves the OpenAI-compatible API |
 | `spec.endpoint.coldStart.mode` | string | `keepalive`; `keepalive` or `reject` | Holds streaming requests with SSE heartbeats or returns `503` with `Retry-After` |
-| `spec.endpoint.coldStart.heartbeatInterval` | duration | `10s` | Keepalive heartbeat interval during activation |
+| `spec.endpoint.coldStart.heartbeatInterval` | positive duration | `10s` | Keepalive heartbeat interval during activation |
 | `spec.imagePullSecrets` | `LocalObjectReference` array | Optional | Applied to backend, gateway, and prewarm Pods; Secrets must be in the service namespace |
 
 Cache PVCs and prewarm Jobs are create-once resources. Delete the Job to prewarm again; preserve needed data before replacing a PVC.
@@ -69,7 +73,9 @@ Cache PVCs and prewarm Jobs are create-once resources. Delete the Job to prewarm
 | `status.resolvedRuntime` | Name of the `InferenceRuntime` selected by the controller. |
 | `status.replicas` | Number of ready backend replicas. Gateway replicas are not included. |
 | `status.endpointURL` | In-cluster OpenAI-compatible base URL, ending in `/v1`. |
-| `status.conditions` | Kubernetes conditions. `Ready` reports serving availability; `AutoscalingReady` reports whether the required KEDA External Push resources are configured. Both use the reconciled `ObservedGeneration`. |
+| `status.conditions` | Kubernetes conditions. `Ready` reports serving availability, `Degraded` reports a Kubernetes-observed backend activation failure, and `AutoscalingReady` reports whether KEDA External Push is configured. Every condition uses the reconciled `ObservedGeneration`. |
+
+`Ready=False` uses progress reasons such as `Activating`, `Starting`, `ModelLoading`, and `SchedulingDelayed`, or the active failure reason. `Degraded=True` uses stable failure reasons: `ImagePullFailed`, `OOMKilled`, `CrashLoopBackOff`, `ContainerRestarting`, or `ProgressDeadlineExceeded`. See [Troubleshoot Noctaya](troubleshooting.md) for diagnosis and the distinction between these observations and the gateway's bounded `activation_timeout`.
 
 ## InferenceRuntime
 

@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 - Added per-`LLMService` demand aggregation for multiple gateway replicas. Gateways publish sequenced snapshots and heartbeats; disconnected members expire so replacement Pods cannot leave permanent demand behind.
+- Added backend activation diagnosis through `LLMService` conditions, Kubernetes events, and controller logs for scheduling delay, image-pull failure, repeated termination, OOM, crash loops, and Deployment progress deadlines.
+- Added opt-in ingress `NetworkPolicy` profiles for client, gateway, backend, KEDA, aggregate-scaler, and monitoring traffic.
+- Added optional `PrometheusRule` examples for queue saturation, activation timeouts, high activation wait, and disconnected External Push streams.
+- Added optional mutual TLS between KEDA and each `LLMService` ExternalScaler using externally managed Secrets and KEDA authentication references.
+- Added an operator-generated per-service token that authenticates bounded demand reports between multiple gateway replicas and their aggregate scaler.
 
 ### Changed
 - Made KEDA External Push the sole scaler transport. Cold `0→1` activation is streamed immediately, while periodic metric reads remain responsible for recovery and `1→N` scale-out.
@@ -18,10 +23,19 @@ All notable changes to this project are documented here. The format is based on
 - Serialized gateway demand notifications so concurrent transitions cannot publish stale scaler state.
 - Made a missing KEDA `ScaledObject` CRD an explicit reconciliation failure and added the `AutoscalingReady` condition.
 - Added signal-aware HTTP and gRPC shutdown to the per-model gateway.
+- Hardened Noctaya-owned data-plane Pods for the Restricted Pod Security Standard and disabled unnecessary service-account token mounts.
+- Required an explicit ServiceAccount when Helm is configured not to create one, and aligned user-facing CRD roles across Helm and Kustomize.
+- Tightened CRD validation for model/runtime selection, runtime images and ports, and cold-start durations while preserving typed-client defaults.
+- Rendered the complete desired state before mutation, watched owned `ScaledObject` and Secret changes, and kept autoscaling status accurate after partial failures.
+- Collapsed concurrent backend readiness probes and recorded activation latency only for requests that actually waited.
+- Bounded aggregate demand-report size, read time, concurrency, membership, and per-gateway demand.
 
 ### Tests
 - Changed the Kind lifecycle to prove activation occurs before a deliberately extended fallback polling interval.
 - Extended the lifecycle to two gateways and verified activation, scale-out, scale-down, and gateway replacement through the aggregate demand path.
+- Added backend Pod replacement coverage for bounded requests, serving recovery, cleared aggregate demand, inactive KEDA state, and return to zero.
+- Added a failing-backend lifecycle that reports `ImagePullFailed`, corrects the runtime, and completes the held inference request without recreating the `LLMService`.
+- Added Kind coverage for NetworkPolicy allow/deny behavior and the complete mutual-TLS External Push lifecycle.
 
 ## [0.4.0-alpha.1] - 2026-07-25
 

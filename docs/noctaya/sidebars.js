@@ -38,6 +38,11 @@ const sidebars = {
     },
     {
       type: 'doc',
+      id: 'docs/troubleshooting',
+      label: 'Troubleshooting',
+    },
+    {
+      type: 'doc',
       id: 'docs/no-gpu',
       label: 'Test without an accelerator',
     },

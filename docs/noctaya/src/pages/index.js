@@ -70,8 +70,8 @@ const ownership = [
 
 const validationTargets = [
   'NVIDIA A10',
-  'NVIDIA A100',
   'Atlas 300I Duo',
+  'Atlas 300I Pro',
   'Ascend 910B3',
 ];
 

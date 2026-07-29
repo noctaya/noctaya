@@ -49,9 +49,13 @@ The suite verifies:
 - cold activation and streaming completion;
 - concurrent scale-out through `0 → 1 → 2 → 0`;
 - aggregate demand from two gateways during gateway replacement;
+- backend Pod replacement, request recovery, and return to zero;
+- backend image-pull failure reporting and recovery after correcting the runtime;
 - graceful drain of an active stream;
 - fast cold-start rejection with `503`; and
-- push activation before the fallback polling interval.
+- push activation before the fallback polling interval;
+- allowed and denied traffic through the opt-in ingress `NetworkPolicy` profile; and
+- KEDA External Push over mutual TLS, including rejection of a plaintext scaler client.
 
 CI runs the same lifecycle through `.github/workflows/test-e2e.yml`.
 

@@ -5,8 +5,7 @@ metadata:
     app.kubernetes.io/name: noctaya
     app.kubernetes.io/managed-by: kustomize
   name: vllm-ascend-310p-pro
-# Atlas 300I Pro profile. Physical validation is still required because vLLM-Ascend
-# does not explicitly list this product.
+# Physically verified Atlas 300I Pro profile; its functional results matched the Duo path.
 spec:
   family: vllm
   vendor: ascend

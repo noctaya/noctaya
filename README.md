@@ -14,7 +14,7 @@
 
 ## Overview
 
-Noctaya lets private Kubernetes clusters serve long-tail LLMs without reserving accelerators for idle models. A lightweight OpenAI-compatible gateway remains available while independently installed KEDA scales each backend through `0 → 1 → N → 0`. Noctaya controls cold-start admission,readiness-aware routing, caching, and graceful drain.
+Noctaya lets private Kubernetes clusters serve long-tail LLMs without reserving accelerators for idle models. A lightweight OpenAI-compatible gateway remains available while independently installed KEDA scales each backend through `0 → 1 → N → 0`. Noctaya controls cold-start admission, readiness-aware routing, caching, and graceful drain.
 
 Application teams declare models and serving policies with `LLMService`. Cluster administrators publish reusable `InferenceRuntime` profiles for runtime images, accelerator resources, scheduling, and health. Noctaya manages this lifecycle while inference engines, device plugins, schedulers, storage, and monitoring remain independently managed.
 

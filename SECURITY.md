@@ -25,6 +25,7 @@ Reports may cover the operator, gateway, APIs, model resolution, generated workl
 security impact. If ownership is unclear, report privately here and we will help route it.
 
 The alpha gateway has no built-in authentication. Direct exposure outside a trusted boundary is unsupported.
+
 ## Response
 
 - We aim to acknowledge reports within **3 business days**, provide an initial assessment within
