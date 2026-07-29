@@ -1,0 +1,36 @@
+apiVersion: serving.noctaya.io/v1alpha1
+kind: LLMService
+metadata:
+  name: stub-mtls
+  namespace: noctaya-e2e
+spec:
+  model:
+    source:
+      uri: hf://noctaya/stub-model
+  runtime:
+    name: vllm-stub
+  resources:
+    accelerators: 1
+    cpu: "100m"
+    memory: 128Mi
+  scaling:
+    min: 0
+    max: 1
+    metric: queueDepth
+    target: 1
+    activationTimeout: 2m
+    scaleDownStabilization: 5s
+    drainTimeout: 20s
+    externalScaler:
+      tls:
+        serverSecretName: noctaya-external-scaler-server
+        authenticationRef:
+          name: noctaya-external-scaler-mtls
+          kind: TriggerAuthentication
+  cache:
+    strategy: None
+  endpoint:
+    openAICompatible: true
+    coldStart:
+      mode: keepalive
+      heartbeatInterval: 2s

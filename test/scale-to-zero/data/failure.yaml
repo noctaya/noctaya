@@ -1,0 +1,59 @@
+apiVersion: serving.noctaya.io/v1alpha1
+kind: InferenceRuntime
+metadata:
+  name: vllm-stub-failing
+spec:
+  family: vllm
+  vendor: nvidia
+  priority: 100
+  container:
+    image: noctaya.io/vllm-stub:missing
+    args:
+      - --model={{ .Model.Path }}
+      - --served-model-name={{ .Service.Name }}
+    port:
+      name: http
+      containerPort: 8000
+  accelerator:
+    resourceName: noctaya.io/fake-gpu
+  health:
+    readiness:
+      httpGet:
+        path: /health
+        port: http
+    startup:
+      httpGet:
+        path: /health
+        port: http
+      periodSeconds: 2
+      failureThreshold: 30
+---
+apiVersion: serving.noctaya.io/v1alpha1
+kind: LLMService
+metadata:
+  name: stub-failure
+  namespace: noctaya-e2e
+spec:
+  model:
+    source:
+      uri: hf://noctaya/stub-model
+  runtime:
+    name: vllm-stub-failing
+  resources:
+    accelerators: 1
+    cpu: "100m"
+    memory: 128Mi
+  scaling:
+    min: 0
+    max: 1
+    metric: queueDepth
+    target: 1
+    activationTimeout: 2m
+    scaleDownStabilization: 15s
+  cache:
+    strategy: None
+  endpoint:
+    openAICompatible: true
+    coldStart:
+      mode: keepalive
+      heartbeatInterval: 2s

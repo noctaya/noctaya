@@ -23,6 +23,7 @@ package scaletozero
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -40,6 +41,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -53,6 +55,7 @@ const (
 
 var (
 	repoRoot        string
+	kubectlBin      string
 	kustomize       string
 	expectedKind    string
 	managerImage    string
@@ -75,7 +78,7 @@ func run(name string, args ...string) (string, error) {
 }
 
 func kubectl(args ...string) (string, error) {
-	return run("kubectl", args...)
+	return run(kubectlBin, args...)
 }
 
 func mustKubectl(args ...string) string {
@@ -96,7 +99,20 @@ func applyManifest(name string) {
 }
 
 func applyYAML(objects []byte) {
-	apply := exec.Command("kubectl", "apply", "-f", "-")
+	apply := exec.Command(kubectlBin, "apply", "-f", "-")
+	apply.Dir = repoRoot
+	apply.Stdin = bytes.NewReader(objects)
+	output, err := apply.CombinedOutput()
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), string(output))
+}
+
+func applyKustomization(path, targetNamespace string) {
+	render := exec.Command(kustomize, "build", filepath.Join(repoRoot, path))
+	render.Dir = repoRoot
+	objects, err := render.Output()
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	apply := exec.Command(kubectlBin, "apply", "-n", targetNamespace, "-f", "-")
 	apply.Dir = repoRoot
 	apply.Stdin = bytes.NewReader(objects)
 	output, err := apply.CombinedOutput()
@@ -135,6 +151,34 @@ func backendPods(name string) (int, error) {
 	return len(strings.Fields(output)), nil
 }
 
+func readyBackendPodNames(name string) ([]string, error) {
+	output, err := kubectl("get", "pods", "-n", namespace,
+		"-l", "serving.noctaya.io/llmservice="+name, "-o", "json")
+	if err != nil {
+		return nil, fmt.Errorf("get backend pods: %w: %s", err, output)
+	}
+	var pods corev1.PodList
+	if err := json.Unmarshal([]byte(output), &pods); err != nil {
+		return nil, fmt.Errorf("decode backend pods: %w", err)
+	}
+
+	names := make([]string, 0, len(pods.Items))
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		if pod.DeletionTimestamp != nil {
+			continue
+		}
+		for _, condition := range pod.Status.Conditions {
+			if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+				names = append(names, pod.Name)
+				break
+			}
+		}
+	}
+	slices.Sort(names)
+	return names, nil
+}
+
 func gatewayPodNames(name string) ([]string, error) {
 	output, err := kubectl("get", "pods", "-n", namespace,
 		"-l", "serving.noctaya.io/gateway="+name, "-o", "jsonpath={.items[*].metadata.name}")
@@ -155,6 +199,8 @@ var _ = BeforeSuite(func() {
 
 	expectedKind = os.Getenv("NOCTAYA_E2E_KIND_CLUSTER")
 	Expect(expectedKind).NotTo(BeEmpty(), "run this suite through make test-e2e")
+	kubectlBin = os.Getenv("NOCTAYA_E2E_KUBECTL")
+	Expect(kubectlBin).NotTo(BeEmpty(), "run this suite through make test-e2e")
 	currentContext := strings.TrimSpace(mustKubectl("config", "current-context"))
 	Expect(currentContext).To(Equal("kind-"+expectedKind),
 		"refusing to mutate a cluster other than the disposable E2E Kind cluster")
@@ -262,7 +308,7 @@ func startResourcePortForward(resource string, remotePort int) *portForward {
 	Expect(listener.Close()).To(Succeed())
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, "kubectl", "port-forward", "--address=127.0.0.1",
+	cmd := exec.CommandContext(ctx, kubectlBin, "port-forward", "--address=127.0.0.1",
 		"-n", namespace, resource, fmt.Sprintf("%d:%d", port, remotePort))
 	cmd.Dir = repoRoot
 	cmd.Stdout = GinkgoWriter

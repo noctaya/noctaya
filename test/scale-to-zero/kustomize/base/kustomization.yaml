@@ -17,7 +17,7 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/args
         value:
-          - --metrics-bind-address=:8443
+          - --metrics-bind-address=0
           - --health-probe-bind-address=:8081
           - --leader-elect
           - --gateway-image=noctaya.io/noctaya-gateway:e2e
