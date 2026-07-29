@@ -8,7 +8,9 @@ COPY go.mod go.mod
 COPY go.sum go.sum
 RUN go mod download
 
-COPY . .
+COPY api/ api/
+COPY cmd/ cmd/
+COPY internal/ internal/
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -ldflags "-X main.version=${VERSION}" -o manager cmd/main.go
 

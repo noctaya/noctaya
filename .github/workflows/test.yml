@@ -43,9 +43,25 @@ jobs:
           helm template noctaya charts/noctaya --namespace noctaya-system >/dev/null
           helm template noctaya charts/noctaya --namespace noctaya-system \
             --set serviceAccount.create=false \
-            --set operator.leaderElect=true >/dev/null
+            --set serviceAccount.name=noctaya-existing >/dev/null
           helm template noctaya charts/noctaya --namespace noctaya-system \
             --set gateway.replicas=2 >/dev/null
+          if helm template noctaya charts/noctaya --namespace noctaya-system \
+            --set serviceAccount.create=false >/dev/null 2>&1; then
+            echo "Expected an explicit existing ServiceAccount name to be required." >&2
+            exit 1
+          fi
+          if helm template noctaya charts/noctaya --namespace noctaya-system \
+            --set operator.replicas=2 \
+            --set operator.leaderElect=false >/dev/null 2>&1; then
+            echo "Expected leader election to be required for multiple operator replicas." >&2
+            exit 1
+          fi
+          if helm template noctaya charts/noctaya --namespace noctaya-system \
+            --set operator.replicas=0 >/dev/null 2>&1; then
+            echo "Expected operator.replicas=0 to fail validation." >&2
+            exit 1
+          fi
           if helm template noctaya charts/noctaya --namespace noctaya-system \
             --set gateway.replicas=0 >/dev/null 2>&1; then
             echo "Expected gateway.replicas=0 to fail validation." >&2

@@ -70,7 +70,7 @@ load-e2e-images:
 	mkdir -p "$(E2E_ARCHIVE_DIR)"
 	$(CONTAINER_TOOL) build --build-arg VERSION=$(VERSION) -t $(E2E_MANAGER_IMG) .
 	$(CONTAINER_TOOL) build --build-arg VERSION=$(VERSION) -f Dockerfile.gateway -t $(E2E_GATEWAY_IMG) .
-	$(CONTAINER_TOOL) build -f Dockerfile.stub -t $(E2E_STUB_IMG) .
+	$(CONTAINER_TOOL) build -f test/vllm-stub/Dockerfile -t $(E2E_STUB_IMG) .
 	$(CONTAINER_TOOL) save $(E2E_MANAGER_IMG) -o "$(E2E_ARCHIVE_DIR)/manager.tar"
 	$(KIND) load image-archive "$(E2E_ARCHIVE_DIR)/manager.tar" --name $(E2E_KIND_CLUSTER)
 	$(CONTAINER_TOOL) save $(E2E_GATEWAY_IMG) -o "$(E2E_ARCHIVE_DIR)/gateway.tar"
@@ -126,6 +126,7 @@ docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
 
 GATEWAY_IMG ?= ghcr.io/noctaya/noctaya-gateway:latest
+GATEWAY_IMAGE_PLACEHOLDER ?= ghcr.io/noctaya/noctaya-gateway:latest
 
 .PHONY: docker-build-gateway
 docker-build-gateway: ## Build the data-plane gateway image.
@@ -139,7 +140,7 @@ STUB_IMG ?= noctaya.io/vllm-stub:e2e
 
 .PHONY: docker-build-stub
 docker-build-stub: ## Build the CPU vllm-stub image used by the no-GPU e2e harness.
-	$(CONTAINER_TOOL) build -f Dockerfile.stub -t ${STUB_IMG} .
+	$(CONTAINER_TOOL) build -f test/vllm-stub/Dockerfile -t ${STUB_IMG} .
 
 .PHONY: helm-crds
 helm-crds: manifests ## Sync generated CRDs into the Helm chart's crds/ directory.
@@ -158,7 +159,8 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
 	mkdir -p dist
 	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
-	"$(KUSTOMIZE)" build config/default > dist/install.yaml
+	"$(KUSTOMIZE)" build config/default | sed \
+		's|$(GATEWAY_IMAGE_PLACEHOLDER)|$(GATEWAY_IMG)|g' > dist/install.yaml
 
 ##@ Deployment
 
@@ -168,18 +170,17 @@ endif
 
 .PHONY: install
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
-	@out="$$( "$(KUSTOMIZE)" build config/crd 2>/dev/null || true )"; \
-	if [ -n "$$out" ]; then echo "$$out" | "$(KUBECTL)" apply -f -; else echo "No CRDs to install; skipping."; fi
+	"$(KUSTOMIZE)" build config/crd | "$(KUBECTL)" apply -f -
 
 .PHONY: uninstall
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	@out="$$( "$(KUSTOMIZE)" build config/crd 2>/dev/null || true )"; \
-	if [ -n "$$out" ]; then echo "$$out" | "$(KUBECTL)" delete --ignore-not-found=$(ignore-not-found) -f -; else echo "No CRDs to delete; skipping."; fi
+	"$(KUSTOMIZE)" build config/crd | "$(KUBECTL)" delete --ignore-not-found=$(ignore-not-found) -f -
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
-	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" apply -f -
+	"$(KUSTOMIZE)" build config/default | sed \
+		's|$(GATEWAY_IMAGE_PLACEHOLDER)|$(GATEWAY_IMG)|g' | "$(KUBECTL)" apply -f -
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.

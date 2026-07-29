@@ -7,7 +7,7 @@ COPY go.mod go.mod
 COPY go.sum go.sum
 RUN go mod download
 
-COPY . .
+COPY test/vllm-stub/ test/vllm-stub/
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o vllm-stub ./test/vllm-stub
 

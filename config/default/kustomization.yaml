@@ -8,13 +8,7 @@ resources:
 - ../manager
 #- ../webhook
 #- ../certmanager
-- metrics_service.yaml
 #- ../network-policy
-
-patches:
-- path: manager_metrics_patch.yaml
-  target:
-    kind: Deployment
 
 #- path: cert_metrics_manager_patch.yaml
 #  target:

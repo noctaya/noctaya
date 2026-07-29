@@ -1,6 +1,6 @@
 apiVersion: v2
 name: noctaya
-description: A minimal, composable LLM serving control plane for private Kubernetes clusters.
+description: A Kubernetes-native control plane for long-tail LLM serving across heterogeneous accelerators.
 type: application
 version: 0.4.0-alpha.1
 appVersion: "0.4.0-alpha.1"

@@ -1,0 +1,45 @@
+{{- $resources := list "llmservices" "inferenceruntimes" -}}
+{{- range $resource := $resources }}
+{{- $singular := trimSuffix "s" $resource }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "noctaya.fullname" $ }}-{{ $singular }}-admin-role
+  labels: {{- include "noctaya.labels" $ | nindent 4 }}
+rules:
+- apiGroups: [serving.noctaya.io]
+  resources: [{{ $resource }}]
+  verbs: ["*"]
+- apiGroups: [serving.noctaya.io]
+  resources: [{{ $resource }}/status]
+  verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "noctaya.fullname" $ }}-{{ $singular }}-editor-role
+  labels: {{- include "noctaya.labels" $ | nindent 4 }}
+rules:
+- apiGroups: [serving.noctaya.io]
+  resources: [{{ $resource }}]
+  verbs: [create, delete, get, list, patch, update, watch]
+- apiGroups: [serving.noctaya.io]
+  resources: [{{ $resource }}/status]
+  verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "noctaya.fullname" $ }}-{{ $singular }}-viewer-role
+  labels: {{- include "noctaya.labels" $ | nindent 4 }}
+rules:
+- apiGroups: [serving.noctaya.io]
+  resources: [{{ $resource }}]
+  verbs: [get, list, watch]
+- apiGroups: [serving.noctaya.io]
+  resources: [{{ $resource }}/status]
+  verbs: [get]
+{{ if ne $resource (last $resources) }}
+---
+{{ end }}
+{{- end }}

@@ -5,6 +5,13 @@
 {{- if or (lt $gatewayReplicas 1) (gt $gatewayReplicas 2147483647) -}}
 {{- fail "gateway.replicas must be between 1 and 2147483647" -}}
 {{- end -}}
+{{- $operatorReplicas := int .Values.operator.replicas -}}
+{{- if or (lt $operatorReplicas 1) (gt $operatorReplicas 2147483647) -}}
+{{- fail "operator.replicas must be between 1 and 2147483647" -}}
+{{- end -}}
+{{- if and (gt $operatorReplicas 1) (not .Values.operator.leaderElect) -}}
+{{- fail "operator.leaderElect must be true when operator.replicas is greater than 1" -}}
+{{- end -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

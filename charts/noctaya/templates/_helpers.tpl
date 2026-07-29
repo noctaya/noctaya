@@ -40,6 +40,6 @@ app.kubernetes.io/component: controller-manager
 {{- if .Values.serviceAccount.create -}}
 {{- default (printf "%s-controller-manager" (include "noctaya.fullname" .)) .Values.serviceAccount.name -}}
 {{- else -}}
-{{- default "default" .Values.serviceAccount.name -}}
+{{- required "serviceAccount.name is required when serviceAccount.create=false" .Values.serviceAccount.name -}}
 {{- end -}}
 {{- end -}}

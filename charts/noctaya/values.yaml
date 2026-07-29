@@ -7,7 +7,7 @@ image:
 
 operator:
   replicas: 1
-  leaderElect: false
+  leaderElect: true
   resources:
     limits:
       cpu: 500m
@@ -22,6 +22,8 @@ gateway:
 
 serviceAccount:
   create: true
+  # Required when create is false; the chart never binds controller privileges
+  # to the namespace's default ServiceAccount implicitly.
   name: ""
 
 nameOverride: ""

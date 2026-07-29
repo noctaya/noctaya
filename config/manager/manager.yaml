@@ -38,9 +38,13 @@ spec:
       - command:
         - /manager
         args:
-          - --leader-elect
+          - --leader-elect=true
           - --health-probe-bind-address=:8081
+          - --metrics-bind-address=0
+          - --gateway-image=ghcr.io/noctaya/noctaya-gateway:latest
+          - --gateway-replicas=1
         image: controller:latest
+        imagePullPolicy: IfNotPresent
         name: manager
         ports:
         - containerPort: 8081
@@ -67,10 +71,10 @@ spec:
         resources:
           limits:
             cpu: 500m
-            memory: 128Mi
+            memory: 256Mi
           requests:
             cpu: 10m
-            memory: 64Mi
+            memory: 128Mi
         volumeMounts: []
       volumes: []
       serviceAccountName: controller-manager
