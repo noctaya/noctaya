@@ -69,6 +69,7 @@ spec:
                     description: |-
                       resourceName is the device-plugin resource key (e.g. nvidia.com/gpu,
                       huawei.com/Ascend910). Configurable because it varies by vendor and version.
+                    minLength: 1
                     type: string
                   scheduler:
                     description: scheduler routes pods to an existing scheduler (e.g.
@@ -308,6 +309,7 @@ spec:
                     type: array
                   image:
                     description: image is the serving runtime image.
+                    minLength: 1
                     type: string
                   port:
                     description: port serves the OpenAI-compatible API and, when enabled
@@ -323,6 +325,8 @@ spec:
                       name:
                         default: http
                         description: name is referenced by Services and probes.
+                        maxLength: 15
+                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                         type: string
                     required:
                     - containerPort

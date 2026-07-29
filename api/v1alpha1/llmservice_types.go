@@ -29,24 +29,27 @@ type LLMServiceSpec struct {
 	Model ModelSpec `json:"model"`
 
 	// runtime selects the backend — pinned by name or auto-picked by vendor preference.
-	// +optional
-	Runtime RuntimeSelection `json:"runtime,omitempty"`
+	Runtime RuntimeSelection `json:"runtime"`
 
 	// resources requests accelerators and compute for each backend replica.
+	// +kubebuilder:default={}
 	// +optional
-	Resources ResourceSpec `json:"resources,omitempty"`
+	Resources ResourceSpec `json:"resources,omitempty,omitzero"`
 
 	// scaling configures KEDA and cold-start timing.
+	// +kubebuilder:default={}
 	// +optional
-	Scaling ScalingSpec `json:"scaling,omitempty"`
+	Scaling ScalingSpec `json:"scaling,omitempty,omitzero"`
 
 	// cache configures model-weight storage and prewarming.
+	// +kubebuilder:default={}
 	// +optional
-	Cache CacheSpec `json:"cache,omitempty"`
+	Cache CacheSpec `json:"cache,omitempty,omitzero"`
 
 	// endpoint configures client-facing cold-start behavior.
+	// +kubebuilder:default={}
 	// +optional
-	Endpoint EndpointSpec `json:"endpoint,omitempty"`
+	Endpoint EndpointSpec `json:"endpoint,omitempty,omitzero"`
 
 	// imagePullSecrets are applied to the backend, gateway, and prewarm pods so images
 	// from private/air-gapped registries can be pulled. The secrets must exist in the
@@ -56,6 +59,7 @@ type LLMServiceSpec struct {
 }
 
 // ModelSpec identifies an inline model source or a future catalog entry.
+// +kubebuilder:validation:XValidation:rule="has(self.source) != (has(self.catalogRef) && size(self.catalogRef) > 0)",message="set exactly one of source or catalogRef"
 type ModelSpec struct {
 	// catalogRef points to an external model catalog entry. Catalog resolution
 	// is currently not implemented in v0; use model.source.uri for now.
@@ -72,6 +76,7 @@ type ModelSource struct {
 	// uri is the model location. Supported in v0: hf://, modelscope://, and
 	// pvc://<claim>[/<subpath>] (pre-staged weights on an existing PVC, mounted
 	// read-only). oci:// and s3:// are not yet implemented.
+	// +kubebuilder:validation:MinLength=1
 	URI string `json:"uri"`
 
 	// secretRef holds credentials for private sources (e.g. a ModelScope token).
@@ -81,6 +86,7 @@ type ModelSource struct {
 }
 
 // RuntimeSelection pins a runtime or selects one by vendor preference.
+// +kubebuilder:validation:XValidation:rule="(has(self.name) && size(self.name) > 0) != (has(self.selector) && has(self.selector.vendor) && size(self.selector.vendor) > 0)",message="set exactly one of name or selector.vendor"
 type RuntimeSelection struct {
 	// name pins one cluster-scoped InferenceRuntime.
 	// +optional
@@ -99,6 +105,8 @@ type RuntimeSelection struct {
 // RuntimeSelector defines ordered runtime preferences.
 type RuntimeSelector struct {
 	// vendor lists acceptable vendors in preference order.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:items:Enum=nvidia;ascend
 	// +optional
 	Vendor []string `json:"vendor,omitempty"`
 }
@@ -139,7 +147,9 @@ type AcceleratorFraction struct {
 
 // ScalingSpec configures KEDA-driven autoscaling. Scaling is intentionally limited
 // to LLM-aware signals: CPU and raw RPS are not supported.
-// +kubebuilder:validation:XValidation:rule="self.min <= self.max",message="min must not exceed max"
+// +kubebuilder:validation:XValidation:rule="!has(self.min) || !has(self.max) || self.min <= self.max",message="min must not exceed max"
+// +kubebuilder:validation:XValidation:rule="!has(self.activationTimeout) || duration(self.activationTimeout) > duration('0s')",message="activationTimeout must be greater than zero"
+// +kubebuilder:validation:XValidation:rule="!has(self.drainTimeout) || duration(self.drainTimeout) >= duration('0s')",message="drainTimeout must not be negative"
 type ScalingSpec struct {
 	// min replicas; 0 enables scale-to-zero.
 	// +kubebuilder:default=0
@@ -169,19 +179,55 @@ type ScalingSpec struct {
 	// activationTimeout is how long the gateway buffers a request during cold start.
 	// +kubebuilder:default="5m"
 	// +optional
-	ActivationTimeout metav1.Duration `json:"activationTimeout,omitempty"`
+	ActivationTimeout metav1.Duration `json:"activationTimeout,omitempty,omitzero"`
 
 	// scaleDownStabilization delays HPA scale-down and the final transition to zero.
 	// Values must use whole seconds and cannot exceed the HPA limit of one hour.
 	// +kubebuilder:default="5m"
 	// +optional
-	ScaleDownStabilization metav1.Duration `json:"scaleDownStabilization,omitempty"`
+	ScaleDownStabilization metav1.Duration `json:"scaleDownStabilization,omitempty,omitzero"`
 
 	// drainTimeout is the pre-stop wait for in-flight requests. Noctaya widens the
 	// pod termination grace period when this timeout needs more room.
 	// +kubebuilder:default="2m"
 	// +optional
-	DrainTimeout metav1.Duration `json:"drainTimeout,omitempty"`
+	DrainTimeout metav1.Duration `json:"drainTimeout,omitempty,omitzero"`
+
+	// externalScaler configures transport security for KEDA's External Push connection.
+	// +optional
+	ExternalScaler *ExternalScalerSpec `json:"externalScaler,omitempty"`
+}
+
+// ExternalScalerSpec configures the KEDA External Push endpoint.
+type ExternalScalerSpec struct {
+	// tls enables mutual TLS between KEDA and the ExternalScaler.
+	// +optional
+	TLS *ExternalScalerTLSSpec `json:"tls,omitempty"`
+}
+
+// ExternalScalerTLSSpec references credentials managed outside Noctaya.
+type ExternalScalerTLSSpec struct {
+	// serverSecretName is a Secret in the LLMService namespace containing tls.crt,
+	// tls.key, and ca.crt. The CA must verify KEDA's client certificate.
+	// +kubebuilder:validation:MinLength=1
+	ServerSecretName string `json:"serverSecretName"`
+
+	// authenticationRef selects the KEDA authentication object that provides
+	// caCert, tlsClientCert, and tlsClientKey.
+	AuthenticationRef KEDAAuthenticationReference `json:"authenticationRef"`
+}
+
+// KEDAAuthenticationReference identifies credentials used by KEDA.
+type KEDAAuthenticationReference struct {
+	// name is the TriggerAuthentication or ClusterTriggerAuthentication name.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// kind selects a namespaced or cluster-scoped KEDA authentication object.
+	// +kubebuilder:validation:Enum=TriggerAuthentication;ClusterTriggerAuthentication
+	// +kubebuilder:default=TriggerAuthentication
+	// +optional
+	Kind string `json:"kind,omitempty"`
 }
 
 // CacheSpec selects how model weights are cached so cold pods load from local disk
@@ -217,11 +263,13 @@ type EndpointSpec struct {
 	OpenAICompatible bool `json:"openAICompatible,omitempty"`
 
 	// coldStart configures requests received while the backend is unavailable.
+	// +kubebuilder:default={}
 	// +optional
-	ColdStart ColdStartSpec `json:"coldStart,omitempty"`
+	ColdStart ColdStartSpec `json:"coldStart,omitempty,omitzero"`
 }
 
 // ColdStartSpec configures how the gateway handles a cold backend.
+// +kubebuilder:validation:XValidation:rule="!has(self.heartbeatInterval) || duration(self.heartbeatInterval) > duration('0s')",message="heartbeatInterval must be greater than zero"
 type ColdStartSpec struct {
 	// mode is how cold requests are handled: keepalive (SSE heartbeats hold the
 	// connection) or reject (fast 503 + Retry-After for the client to retry).
@@ -233,7 +281,7 @@ type ColdStartSpec struct {
 	// heartbeatInterval controls SSE keepalive comments while activation waits.
 	// +kubebuilder:default="10s"
 	// +optional
-	HeartbeatInterval metav1.Duration `json:"heartbeatInterval,omitempty"`
+	HeartbeatInterval metav1.Duration `json:"heartbeatInterval,omitempty,omitzero"`
 }
 
 // LLMServicePhase summarizes backend availability.

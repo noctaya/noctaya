@@ -46,21 +46,22 @@ type InferenceRuntimeSpec struct {
 
 	// health configures probes for model loading and serving.
 	// +optional
-	Health RuntimeHealth `json:"health,omitempty"`
+	Health RuntimeHealth `json:"health,omitempty,omitzero"`
 
 	// lifecycle configures graceful serving-pod termination.
 	// +optional
-	Lifecycle RuntimeLifecycle `json:"lifecycle,omitempty"`
+	Lifecycle RuntimeLifecycle `json:"lifecycle,omitempty,omitzero"`
 
 	// metrics describes optional runtime telemetry for external integrations.
 	// Noctaya autoscaling uses the gateway queue and does not consume these fields.
 	// +optional
-	Metrics RuntimeMetrics `json:"metrics,omitempty"`
+	Metrics RuntimeMetrics `json:"metrics,omitempty,omitzero"`
 }
 
 // RuntimeContainer describes the serving container rendered into backend pods.
 type RuntimeContainer struct {
 	// image is the serving runtime image.
+	// +kubebuilder:validation:MinLength=1
 	Image string `json:"image"`
 
 	// args are Go-templated and rendered with model and service context.
@@ -79,6 +80,8 @@ type RuntimeContainer struct {
 type RuntimePort struct {
 	// name is referenced by Services and probes.
 	// +kubebuilder:default=http
+	// +kubebuilder:validation:MaxLength=15
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
 	Name string `json:"name"`
 
 	// containerPort is the serving API port.
@@ -92,11 +95,12 @@ type RuntimePort struct {
 type AcceleratorSpec struct {
 	// resourceName is the device-plugin resource key (e.g. nvidia.com/gpu,
 	// huawei.com/Ascend910). Configurable because it varies by vendor and version.
+	// +kubebuilder:validation:MinLength=1
 	ResourceName string `json:"resourceName"`
 
 	// sharing declares whether this runtime supports fractional devices (e.g. NVIDIA via HAMi).
 	// +optional
-	Sharing AcceleratorSharing `json:"sharing,omitempty"`
+	Sharing AcceleratorSharing `json:"sharing,omitempty,omitzero"`
 
 	// nodeSelector constrains backend and prewarm pods to compatible nodes.
 	// +optional
@@ -108,7 +112,7 @@ type AcceleratorSpec struct {
 
 	// scheduler routes pods to an existing scheduler (e.g. Volcano).
 	// +optional
-	Scheduler RuntimeScheduler `json:"scheduler,omitempty"`
+	Scheduler RuntimeScheduler `json:"scheduler,omitempty,omitzero"`
 }
 
 // AcceleratorSharing declares adapter support for fractional devices.

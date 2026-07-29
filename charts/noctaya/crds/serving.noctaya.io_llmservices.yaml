@@ -55,6 +55,7 @@ spec:
               caching, and endpoint.
             properties:
               cache:
+                default: {}
                 description: cache configures model-weight storage and prewarming.
                 properties:
                   prewarm:
@@ -86,9 +87,11 @@ spec:
                     type: string
                 type: object
               endpoint:
+                default: {}
                 description: endpoint configures client-facing cold-start behavior.
                 properties:
                   coldStart:
+                    default: {}
                     description: coldStart configures requests received while the
                       backend is unavailable.
                     properties:
@@ -107,6 +110,10 @@ spec:
                         - reject
                         type: string
                     type: object
+                    x-kubernetes-validations:
+                    - message: heartbeatInterval must be greater than zero
+                      rule: '!has(self.heartbeatInterval) || duration(self.heartbeatInterval)
+                        > duration(''0s'')'
                   openAICompatible:
                     default: true
                     description: |-
@@ -168,12 +175,18 @@ spec:
                           uri is the model location. Supported in v0: hf://, modelscope://, and
                           pvc://<claim>[/<subpath>] (pre-staged weights on an existing PVC, mounted
                           read-only). oci:// and s3:// are not yet implemented.
+                        minLength: 1
                         type: string
                     required:
                     - uri
                     type: object
                 type: object
+                x-kubernetes-validations:
+                - message: set exactly one of source or catalogRef
+                  rule: has(self.source) != (has(self.catalogRef) && size(self.catalogRef)
+                    > 0)
               resources:
+                default: {}
                 description: resources requests accelerators and compute for each
                   backend replica.
                 properties:
@@ -239,11 +252,20 @@ spec:
                         description: vendor lists acceptable vendors in preference
                           order.
                         items:
+                          enum:
+                          - nvidia
+                          - ascend
                           type: string
+                        minItems: 1
                         type: array
                     type: object
                 type: object
+                x-kubernetes-validations:
+                - message: set exactly one of name or selector.vendor
+                  rule: (has(self.name) && size(self.name) > 0) != (has(self.selector)
+                    && has(self.selector.vendor) && size(self.selector.vendor) > 0)
               scaling:
+                default: {}
                 description: scaling configures KEDA and cold-start timing.
                 properties:
                   activationTimeout:
@@ -257,6 +279,45 @@ spec:
                       drainTimeout is the pre-stop wait for in-flight requests. Noctaya widens the
                       pod termination grace period when this timeout needs more room.
                     type: string
+                  externalScaler:
+                    description: externalScaler configures transport security for
+                      KEDA's External Push connection.
+                    properties:
+                      tls:
+                        description: tls enables mutual TLS between KEDA and the ExternalScaler.
+                        properties:
+                          authenticationRef:
+                            description: |-
+                              authenticationRef selects the KEDA authentication object that provides
+                              caCert, tlsClientCert, and tlsClientKey.
+                            properties:
+                              kind:
+                                default: TriggerAuthentication
+                                description: kind selects a namespaced or cluster-scoped
+                                  KEDA authentication object.
+                                enum:
+                                - TriggerAuthentication
+                                - ClusterTriggerAuthentication
+                                type: string
+                              name:
+                                description: name is the TriggerAuthentication or
+                                  ClusterTriggerAuthentication name.
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          serverSecretName:
+                            description: |-
+                              serverSecretName is a Secret in the LLMService namespace containing tls.crt,
+                              tls.key, and ca.crt. The CA must verify KEDA's client certificate.
+                            minLength: 1
+                            type: string
+                        required:
+                        - authenticationRef
+                        - serverSecretName
+                        type: object
+                    type: object
                   max:
                     default: 1
                     description: max is the maximum number of backend replicas.
@@ -293,9 +354,16 @@ spec:
                 type: object
                 x-kubernetes-validations:
                 - message: min must not exceed max
-                  rule: self.min <= self.max
+                  rule: '!has(self.min) || !has(self.max) || self.min <= self.max'
+                - message: activationTimeout must be greater than zero
+                  rule: '!has(self.activationTimeout) || duration(self.activationTimeout)
+                    > duration(''0s'')'
+                - message: drainTimeout must not be negative
+                  rule: '!has(self.drainTimeout) || duration(self.drainTimeout) >=
+                    duration(''0s'')'
             required:
             - model
+            - runtime
             type: object
           status:
             description: LLMServiceStatus defines the observed state of LLMService.
