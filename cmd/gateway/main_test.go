@@ -23,11 +23,12 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/noctaya/noctaya/internal/gateway"
+	"github.com/noctaya/noctaya/internal/gateway/proxy"
+	"github.com/noctaya/noctaya/internal/gateway/scaler"
 )
 
 func TestServeStopsWhenContextIsCanceled(t *testing.T) {
-	instance, err := gateway.New(gateway.Config{BackendURL: "http://127.0.0.1:1"})
+	instance, err := proxy.New(proxy.Config{BackendURL: "http://127.0.0.1:1"})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -36,7 +37,7 @@ func TestServeStopsWhenContextIsCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- serve(ctx, instance.Handler(), "127.0.0.1:0", "", nil)
+		done <- serve(ctx, instance.Handler(), "127.0.0.1:0", 0, "", nil)
 	}()
 	cancel()
 
@@ -51,7 +52,7 @@ func TestServeStopsWhenContextIsCanceled(t *testing.T) {
 }
 
 func TestServeStopsScalerWhenContextIsCanceled(t *testing.T) {
-	instance, err := gateway.New(gateway.Config{BackendURL: "http://127.0.0.1:1"})
+	instance, err := proxy.New(proxy.Config{BackendURL: "http://127.0.0.1:1"})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -64,8 +65,9 @@ func TestServeStopsScalerWhenContextIsCanceled(t *testing.T) {
 			ctx,
 			instance.Handler(),
 			"127.0.0.1:0",
+			0,
 			"127.0.0.1:0",
-			func(server *grpc.Server) { gateway.RegisterExternalScalerServer(server, instance) },
+			func(server *grpc.Server) { scaler.RegisterExternalScalerServer(server, instance) },
 		)
 	}()
 	cancel()

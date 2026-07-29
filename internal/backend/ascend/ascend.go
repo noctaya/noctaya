@@ -21,13 +21,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
-	"github.com/noctaya/noctaya/internal/backend"
+	backendruntime "github.com/noctaya/noctaya/internal/backend/runtime"
 )
 
 const Vendor = "ascend"
 
 // hostDriverMounts are required when the container runtime does not inject CANN drivers.
-var hostDriverMounts = []backend.HostMount{
+var hostDriverMounts = []backendruntime.HostMount{
 	{Name: "ascend-driver", Path: "/usr/local/Ascend/driver"},
 	{Name: "npu-smi", Path: "/usr/local/bin/npu-smi"},
 	{Name: "dcmi", Path: "/usr/local/dcmi"},
@@ -38,19 +38,19 @@ type Adapter struct{}
 
 func New() *Adapter { return &Adapter{} }
 
-var _ backend.BackendAdapter = (*Adapter)(nil)
+var _ backendruntime.BackendAdapter = (*Adapter)(nil)
 
 func (a *Adapter) Vendor() string { return Vendor }
 
-func (a *Adapter) PodSpec(svc *servingv1alpha1.LLMService, rt *servingv1alpha1.InferenceRuntime, m backend.ResolvedModel) (corev1.PodSpec, error) {
-	pod, err := backend.RenderVLLMPodSpec(svc, rt, m)
+func (a *Adapter) PodSpec(svc *servingv1alpha1.LLMService, rt *servingv1alpha1.InferenceRuntime, m backendruntime.ResolvedModel) (corev1.PodSpec, error) {
+	pod, err := backendruntime.RenderVLLMPodSpec(svc, rt, m)
 	if err != nil {
 		return corev1.PodSpec{}, err
 	}
-	backend.AddHostMounts(&pod, hostDriverMounts)
+	backendruntime.AddHostMounts(&pod, hostDriverMounts)
 	return pod, nil
 }
 
-func (a *Adapter) Accelerator(svc *servingv1alpha1.LLMService, rt *servingv1alpha1.InferenceRuntime) (backend.AcceleratorRequest, error) {
-	return backend.WholeDeviceAccelerator(svc, rt)
+func (a *Adapter) Accelerator(svc *servingv1alpha1.LLMService, rt *servingv1alpha1.InferenceRuntime) (backendruntime.AcceleratorRequest, error) {
+	return backendruntime.WholeDeviceAccelerator(svc, rt)
 }

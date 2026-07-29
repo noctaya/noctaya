@@ -14,20 +14,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package registry wires the built-in backend adapters into a Registry. It lives in
-// its own package so adapter packages can import backend without an import cycle.
+// Package registry owns adapter registration and lookup.
 package registry
 
 import (
-	"github.com/noctaya/noctaya/internal/backend"
 	"github.com/noctaya/noctaya/internal/backend/ascend"
 	"github.com/noctaya/noctaya/internal/backend/nvidia"
+	backendruntime "github.com/noctaya/noctaya/internal/backend/runtime"
 )
 
-// New returns the registry of built-in Kubernetes adapters.
-func New() *backend.Registry {
-	r := backend.NewRegistry()
-	r.Register(nvidia.New())
-	r.Register(ascend.New())
-	return r
+type Registry struct {
+	adapters map[string]backendruntime.BackendAdapter
+}
+
+func New() *Registry {
+	registry := &Registry{adapters: map[string]backendruntime.BackendAdapter{}}
+	registry.Register(nvidia.New())
+	registry.Register(ascend.New())
+	return registry
+}
+
+func (r *Registry) Register(adapter backendruntime.BackendAdapter) {
+	r.adapters[adapter.Vendor()] = adapter
+}
+
+func (r *Registry) Get(vendor string) (backendruntime.BackendAdapter, bool) {
+	adapter, ok := r.adapters[vendor]
+	return adapter, ok
 }

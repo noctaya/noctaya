@@ -24,8 +24,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
-	"github.com/noctaya/noctaya/internal/backend"
 	"github.com/noctaya/noctaya/internal/backend/ascend"
+	"github.com/noctaya/noctaya/internal/backend/resources"
+	backendruntime "github.com/noctaya/noctaya/internal/backend/runtime"
 )
 
 func ascendRuntime() *servingv1alpha1.InferenceRuntime {
@@ -57,13 +58,13 @@ func ascendService() *servingv1alpha1.LLMService {
 	}
 }
 
-func resolved() backend.ResolvedModel {
-	return backend.ResolvedModel{Path: "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"}
+func resolved() backendruntime.ResolvedModel {
+	return backendruntime.ResolvedModel{Path: "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"}
 }
 
 func TestSameFrameworkRendersAscend(t *testing.T) {
 	g := NewWithT(t)
-	dep, err := backend.BuildDeployment(ascend.New(), ascendService(), ascendRuntime(), resolved())
+	dep, err := resources.BuildBackendDeployment(ascend.New(), ascendService(), ascendRuntime(), resolved())
 	g.Expect(err).NotTo(HaveOccurred())
 
 	c := dep.Spec.Template.Spec.Containers[0]

@@ -13,9 +13,18 @@ metadata:
   name: {{ include "noctaya.fullname" . }}-manager-role
   labels: {{- include "noctaya.labels" . | nindent 4 }}
 rules:
+- apiGroups: [events.k8s.io]
+  resources: [events]
+  verbs: [create, patch]
 - apiGroups: [""]
   resources: [persistentvolumeclaims, services]
   verbs: [create, delete, get, list, patch, update, watch]
+- apiGroups: [""]
+  resources: [secrets]
+  verbs: [create, delete, get, list, watch]
+- apiGroups: [""]
+  resources: [pods]
+  verbs: [get, list, watch]
 - apiGroups: [apps]
   resources: [deployments]
   verbs: [create, delete, get, list, patch, update, watch]

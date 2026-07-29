@@ -27,20 +27,24 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"google.golang.org/grpc"
 
-	"github.com/noctaya/noctaya/internal/gateway"
+	"github.com/noctaya/noctaya/internal/gateway/demand"
+	"github.com/noctaya/noctaya/internal/gateway/proxy"
+	"github.com/noctaya/noctaya/internal/gateway/scaler"
 )
 
 var version = "dev"
 
 const (
-	shutdownTimeout = 20 * time.Second
-	modeGateway     = "gateway"
-	modeAggregator  = "aggregator"
+	shutdownTimeout       = 20 * time.Second
+	aggregatorReadTimeout = 5 * time.Second
+	modeGateway           = "gateway"
+	modeAggregator        = "aggregator"
 )
 
 func main() {
@@ -70,27 +74,28 @@ func main() {
 }
 
 func runGateway(ctx context.Context) error {
-	cfg := gateway.ConfigFromEnv()
+	cfg := proxy.ConfigFromEnv()
 	if cfg.BackendURL == "" {
-		return fmt.Errorf("%s is required", gateway.EnvBackendURL)
+		return fmt.Errorf("%s is required", proxy.EnvBackendURL)
 	}
 
-	gw, err := gateway.New(cfg)
+	gw, err := proxy.New(cfg)
 	if err != nil {
 		return fmt.Errorf("build gateway: %w", err)
 	}
 	defer gw.Close()
 
-	addr := os.Getenv(gateway.EnvListenAddr)
+	addr := os.Getenv(proxy.EnvListenAddr)
 	if addr == "" {
-		addr = gateway.DefaultListenAddr
+		addr = proxy.DefaultListenAddr
 	}
 
-	aggregatorURL := os.Getenv(gateway.EnvDemandAggregator)
+	aggregatorURL := os.Getenv(proxy.EnvDemandAggregatorURL)
 	if aggregatorURL != "" {
-		reporter, err := gateway.NewDemandReporter(gw, gateway.DemandReporterConfig{
-			Endpoint:  aggregatorURL,
-			GatewayID: processGatewayID(),
+		reporter, err := proxy.NewDemandReporter(gw, proxy.DemandReporterConfig{
+			Endpoint:      aggregatorURL,
+			GatewayID:     processGatewayID(),
+			AuthTokenFile: os.Getenv(demand.EnvAuthTokenFile),
 		})
 		if err != nil {
 			return fmt.Errorf("build demand reporter: %w", err)
@@ -104,26 +109,42 @@ func runGateway(ctx context.Context) error {
 
 		log.Printf("Noctaya gateway version %s listening on %s, backend %s", version, addr, cfg.BackendURL)
 		log.Printf("Noctaya gateway publishing demand to %s", aggregatorURL)
-		err = serve(ctx, gw.Handler(), addr, "", nil)
+		err = serve(ctx, gw.Handler(), addr, 0, "", nil)
 		cancelReporter()
 		<-reporterDone
 		return err
 	}
 
-	scalerAddr := os.Getenv(gateway.EnvScalerListenAddr)
+	scalerAddr := os.Getenv(scaler.EnvListenAddr)
 	if scalerAddr == "" {
-		scalerAddr = gateway.DefaultScalerListenAddr
+		scalerAddr = scaler.DefaultListenAddr
 	}
 	log.Printf("Noctaya gateway version %s listening on %s, backend %s", version, addr, cfg.BackendURL)
 	log.Printf("Noctaya external scaler listening on %s", scalerAddr)
 
-	return serve(ctx, gw.Handler(), addr, scalerAddr, func(server *grpc.Server) {
-		gateway.RegisterExternalScalerServer(server, gw)
+	return serve(ctx, gw.Handler(), addr, 0, scalerAddr, func(server *grpc.Server) {
+		scaler.RegisterExternalScalerServer(server, gw)
 	})
 }
 
 func runAggregator(ctx context.Context) error {
-	aggregator := gateway.NewDemandAggregator(gateway.DemandAggregatorConfig{})
+	authTokenFile := os.Getenv(demand.EnvAuthTokenFile)
+	if _, err := demand.ReadAuthToken(authTokenFile); err != nil {
+		return err
+	}
+	maxMembers, err := positiveIntFromEnv(scaler.EnvMaxGatewayMembers)
+	if err != nil {
+		return err
+	}
+	maxDemand, err := positiveInt64FromEnv(scaler.EnvMaxGatewayDemand)
+	if err != nil {
+		return err
+	}
+	aggregator := scaler.NewDemandAggregator(scaler.DemandAggregatorConfig{
+		AuthTokenFile: authTokenFile,
+		MaxMembers:    maxMembers,
+		MaxDemand:     maxDemand,
+	})
 	aggregatorCtx, cancelAggregator := context.WithCancel(context.Background())
 	aggregatorDone := make(chan struct{})
 	go func() {
@@ -135,23 +156,47 @@ func runAggregator(ctx context.Context) error {
 		<-aggregatorDone
 	}()
 
-	addr := os.Getenv(gateway.EnvAggregatorAddr)
+	addr := os.Getenv(scaler.EnvAggregatorListenAddr)
 	if addr == "" {
-		addr = gateway.DefaultAggregatorAddr
+		addr = scaler.DefaultAggregatorListenAddr
 	}
-	scalerAddr := os.Getenv(gateway.EnvScalerListenAddr)
+	scalerAddr := os.Getenv(scaler.EnvListenAddr)
 	if scalerAddr == "" {
-		scalerAddr = gateway.DefaultScalerListenAddr
+		scalerAddr = scaler.DefaultListenAddr
 	}
 	log.Printf("Noctaya demand aggregator version %s listening on %s", version, addr)
 	log.Printf("Noctaya external scaler listening on %s", scalerAddr)
-	return serve(ctx, aggregator.Handler(), addr, scalerAddr, func(server *grpc.Server) {
-		gateway.RegisterExternalScalerServer(server, aggregator)
+	return serve(ctx, aggregator.Handler(), addr, aggregatorReadTimeout, scalerAddr, func(server *grpc.Server) {
+		scaler.RegisterExternalScalerServer(server, aggregator)
 	})
 }
 
+func positiveIntFromEnv(name string) (int, error) {
+	value := os.Getenv(name)
+	if value == "" {
+		return 0, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", name)
+	}
+	return parsed, nil
+}
+
+func positiveInt64FromEnv(name string) (int64, error) {
+	value := os.Getenv(name)
+	if value == "" {
+		return 0, nil
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || parsed <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", name)
+	}
+	return parsed, nil
+}
+
 func processGatewayID() string {
-	if id := os.Getenv(gateway.EnvGatewayID); id != "" {
+	if id := os.Getenv(proxy.EnvGatewayID); id != "" {
 		return id
 	}
 	hostname, err := os.Hostname()
@@ -165,6 +210,7 @@ func serve(
 	ctx context.Context,
 	handler http.Handler,
 	addr string,
+	readTimeout time.Duration,
 	scalerAddr string,
 	registerScaler func(*grpc.Server),
 ) error {
@@ -175,6 +221,7 @@ func serve(
 	httpServer := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       readTimeout,
 	}
 
 	var grpcServer *grpc.Server
@@ -189,7 +236,13 @@ func serve(
 			_ = httpListener.Close()
 			return fmt.Errorf("listen for external scaler gRPC: %w", err)
 		}
-		grpcServer = grpc.NewServer()
+		serverOptions, err := scaler.ExternalScalerServerOptionsFromEnv()
+		if err != nil {
+			_ = scalerListener.Close()
+			_ = httpListener.Close()
+			return fmt.Errorf("configure external scaler gRPC: %w", err)
+		}
+		grpcServer = grpc.NewServer(serverOptions...)
 		registerScaler(grpcServer)
 	}
 

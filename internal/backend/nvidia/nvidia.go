@@ -23,7 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
-	"github.com/noctaya/noctaya/internal/backend"
+	backendruntime "github.com/noctaya/noctaya/internal/backend/runtime"
 )
 
 const Vendor = "nvidia"
@@ -32,14 +32,14 @@ type Adapter struct{}
 
 func New() *Adapter { return &Adapter{} }
 
-var _ backend.BackendAdapter = (*Adapter)(nil)
+var _ backendruntime.BackendAdapter = (*Adapter)(nil)
 
 func (a *Adapter) Vendor() string { return Vendor }
 
-func (a *Adapter) PodSpec(svc *servingv1alpha1.LLMService, rt *servingv1alpha1.InferenceRuntime, m backend.ResolvedModel) (corev1.PodSpec, error) {
-	return backend.RenderVLLMPodSpec(svc, rt, m)
+func (a *Adapter) PodSpec(svc *servingv1alpha1.LLMService, rt *servingv1alpha1.InferenceRuntime, m backendruntime.ResolvedModel) (corev1.PodSpec, error) {
+	return backendruntime.RenderVLLMPodSpec(svc, rt, m)
 }
 
-func (a *Adapter) Accelerator(svc *servingv1alpha1.LLMService, rt *servingv1alpha1.InferenceRuntime) (backend.AcceleratorRequest, error) {
-	return backend.WholeDeviceAccelerator(svc, rt)
+func (a *Adapter) Accelerator(svc *servingv1alpha1.LLMService, rt *servingv1alpha1.InferenceRuntime) (backendruntime.AcceleratorRequest, error) {
+	return backendruntime.WholeDeviceAccelerator(svc, rt)
 }

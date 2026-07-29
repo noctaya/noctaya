@@ -35,8 +35,9 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
-	"github.com/noctaya/noctaya/internal/backend"
-	"github.com/noctaya/noctaya/internal/controller"
+	backendresources "github.com/noctaya/noctaya/internal/backend/resources"
+	"github.com/noctaya/noctaya/internal/controller/inferenceruntime"
+	"github.com/noctaya/noctaya/internal/controller/llmservice"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -95,7 +96,7 @@ func main() {
 	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
-	if err := backend.ValidateGatewayReplicas(gatewayReplicas); err != nil {
+	if err := backendresources.ValidateGatewayReplicas(gatewayReplicas); err != nil {
 		setupLog.Error(err, "Invalid gateway configuration", "gateway-replicas", gatewayReplicas)
 		os.Exit(1)
 	}
@@ -143,13 +144,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.InferenceRuntimeReconciler{
+	if err := (&inferenceruntime.InferenceRuntimeReconciler{
 		Client: mgr.GetClient(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "inferenceruntime")
 		os.Exit(1)
 	}
-	if err := (&controller.LLMServiceReconciler{
+	if err := (&llmservice.LLMServiceReconciler{
 		Client:          mgr.GetClient(),
 		Scheme:          mgr.GetScheme(),
 		GatewayImage:    gatewayImage,

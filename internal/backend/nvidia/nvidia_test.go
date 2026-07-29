@@ -26,8 +26,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
-	"github.com/noctaya/noctaya/internal/backend"
 	"github.com/noctaya/noctaya/internal/backend/nvidia"
+	"github.com/noctaya/noctaya/internal/backend/resources"
+	backendruntime "github.com/noctaya/noctaya/internal/backend/runtime"
 )
 
 func sampleRuntime() *servingv1alpha1.InferenceRuntime {
@@ -68,8 +69,8 @@ func sampleService() *servingv1alpha1.LLMService {
 	}
 }
 
-func resolvedModel() backend.ResolvedModel {
-	return backend.ResolvedModel{
+func resolvedModel() backendruntime.ResolvedModel {
+	return backendruntime.ResolvedModel{
 		Path: "Qwen/Qwen3-8B-Instruct",
 		Env:  []corev1.EnvVar{{Name: "VLLM_USE_MODELSCOPE", Value: "true"}},
 	}
@@ -82,7 +83,7 @@ func TestPodSpecRendersContainer(t *testing.T) {
 	g.Expect(pod.Containers).To(HaveLen(1))
 
 	c := pod.Containers[0]
-	g.Expect(c.Name).To(Equal(backend.ServingContainerName))
+	g.Expect(c.Name).To(Equal(backendruntime.ServingContainerName))
 	g.Expect(c.Image).To(Equal("vllm/vllm-openai:v0.22.0"))
 	g.Expect(c.Args).To(Equal([]string{
 		"--model=Qwen/Qwen3-8B-Instruct",
@@ -112,7 +113,7 @@ func TestAcceleratorMapsResource(t *testing.T) {
 
 func TestBuildDeploymentAssembles(t *testing.T) {
 	g := NewWithT(t)
-	dep, err := backend.BuildDeployment(nvidia.New(), sampleService(), sampleRuntime(), resolvedModel())
+	dep, err := resources.BuildBackendDeployment(nvidia.New(), sampleService(), sampleRuntime(), resolvedModel())
 	g.Expect(err).NotTo(HaveOccurred())
 
 	g.Expect(dep.Spec.Replicas).To(BeNil())
@@ -128,12 +129,12 @@ func TestBuildDeploymentRendersVolcanoQueue(t *testing.T) {
 	rt := sampleRuntime()
 	rt.Spec.Accelerator.Scheduler = servingv1alpha1.RuntimeScheduler{Name: "volcano", Queue: "inference"}
 
-	dep, err := backend.BuildDeployment(nvidia.New(), sampleService(), rt, resolvedModel())
+	dep, err := resources.BuildBackendDeployment(nvidia.New(), sampleService(), rt, resolvedModel())
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(dep.Spec.Template.Spec.SchedulerName).To(Equal("volcano"))
 	g.Expect(dep.Spec.Template.Annotations).To(HaveKeyWithValue("scheduling.volcano.sh/queue-name", "inference"))
 
-	plain, err := backend.BuildDeployment(nvidia.New(), sampleService(), sampleRuntime(), resolvedModel())
+	plain, err := resources.BuildBackendDeployment(nvidia.New(), sampleService(), sampleRuntime(), resolvedModel())
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(plain.Spec.Template.Annotations).NotTo(HaveKey("scheduling.volcano.sh/queue-name"))
 }
@@ -143,7 +144,7 @@ func TestBuildDeploymentRejectsQueueWithoutVolcano(t *testing.T) {
 	rt := sampleRuntime()
 	rt.Spec.Accelerator.Scheduler.Queue = "inference"
 
-	_, err := backend.BuildDeployment(nvidia.New(), sampleService(), rt, resolvedModel())
+	_, err := resources.BuildBackendDeployment(nvidia.New(), sampleService(), rt, resolvedModel())
 	g.Expect(err).To(MatchError(ContainSubstring("scheduler.name=volcano")))
 }
 
