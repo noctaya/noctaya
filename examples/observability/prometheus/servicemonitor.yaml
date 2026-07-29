@@ -13,6 +13,10 @@ spec:
     - interval: 15s
       path: /metrics
       port: http
+      relabelings:
+        - sourceLabels:
+            - __meta_kubernetes_service_label_serving_noctaya_io_llmservice
+          targetLabel: llmservice
   selector:
     matchLabels:
       app.kubernetes.io/managed-by: noctaya

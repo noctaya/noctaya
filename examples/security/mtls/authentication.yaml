@@ -1,0 +1,15 @@
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: noctaya-external-scaler-mtls
+spec:
+  secretTargetRef:
+    - parameter: caCert
+      name: noctaya-external-scaler-client
+      key: ca.crt
+    - parameter: tlsClientCert
+      name: noctaya-external-scaler-client
+      key: tls.crt
+    - parameter: tlsClientKey
+      name: noctaya-external-scaler-client
+      key: tls.key

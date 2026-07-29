@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: noctaya-allow-client-to-gateway
+spec:
+  podSelector:
+    matchExpressions:
+      - key: serving.noctaya.io/gateway
+        operator: Exists
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              serving.noctaya.io/client-access: "true"
+      ports:
+        - port: 8080
+          protocol: TCP

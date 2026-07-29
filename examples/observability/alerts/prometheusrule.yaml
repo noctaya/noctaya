@@ -1,0 +1,63 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    app.kubernetes.io/name: noctaya
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/managed-by: kustomize
+  name: noctaya-gateway
+spec:
+  groups:
+    - name: noctaya.gateway
+      rules:
+        - alert: NoctayaGatewayQueueSaturated
+          expr: |
+            sum by (namespace, llmservice) (
+              rate(noctaya_gateway_rejections_total{reason="queue_full"}[5m])
+            ) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Noctaya gateway queue is saturated
+            description: LLMService {{ $labels.namespace }}/{{ $labels.llmservice }} is persistently rejecting requests because its admission queue is full.
+            runbook: Tune this example threshold for the workload, then inspect gateway demand, backend readiness, and accelerator capacity.
+        - alert: NoctayaGatewayActivationTimeouts
+          expr: |
+            sum by (namespace, llmservice) (
+              increase(noctaya_gateway_rejections_total{reason="activation_timeout"}[15m])
+            ) > 3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: Noctaya requests are timing out during activation
+            description: LLMService {{ $labels.namespace }}/{{ $labels.llmservice }} has repeatedly exceeded its activation timeout.
+            runbook: Tune this example threshold for the workload, then inspect scheduling, image pulls, model loading, and readiness.
+        - alert: NoctayaGatewayActivationWaitHigh
+          expr: |
+            histogram_quantile(
+              0.95,
+              sum by (namespace, llmservice, le) (
+                rate(noctaya_gateway_activation_wait_seconds_bucket[15m])
+              )
+            ) > 180
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Noctaya activation wait is high
+            description: The estimated p95 activation wait for LLMService {{ $labels.namespace }}/{{ $labels.llmservice }} has exceeded three minutes.
+            runbook: Tune this example threshold for the workload, then compare scheduling, image-pull, model-load, and readiness latency.
+        - alert: NoctayaExternalScalerStreamMissing
+          expr: |
+            sum by (namespace, llmservice) (
+              noctaya_gateway_scaler_streams
+            ) < 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: KEDA External Push stream is disconnected
+            description: LLMService {{ $labels.namespace }}/{{ $labels.llmservice }} has no active KEDA External Push stream.
+            runbook: Review this example duration, then confirm KEDA is running and can reach the per-service ExternalScaler on port 9090.

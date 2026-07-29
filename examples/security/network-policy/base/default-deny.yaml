@@ -1,0 +1,10 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: noctaya-default-deny-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/managed-by: noctaya
+  policyTypes:
+    - Ingress

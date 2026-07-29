@@ -86,4 +86,9 @@ Change `InferenceRuntime` only when the image, accelerator integration, scheduli
 ## Optional observability
 
 Noctaya does not install Prometheus or Grafana. The independent
-[`observability`](https://github.com/noctaya/noctaya/tree/main/examples/observability) package contains an optional `ServiceMonitor` and dashboard.
+[`observability`](https://github.com/noctaya/noctaya/tree/main/examples/observability) package contains an optional `ServiceMonitor`, alert examples, and dashboard.
+
+## Optional traffic security
+
+Noctaya does not manage network isolation or certificates. The independent
+[`security`](https://github.com/noctaya/noctaya/tree/main/examples/security) package provides opt-in ingress `NetworkPolicy` profiles and KEDA-to-ExternalScaler mutual TLS configuration.

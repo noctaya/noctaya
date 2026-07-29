@@ -1,0 +1,59 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: noctaya-allow-monitoring-to-gateway
+spec:
+  podSelector:
+    matchExpressions:
+      - key: serving.noctaya.io/gateway
+        operator: Exists
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              serving.noctaya.io/monitoring-access: "true"
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: noctaya-allow-monitoring-to-backend
+spec:
+  podSelector:
+    matchExpressions:
+      - key: serving.noctaya.io/runtime
+        operator: Exists
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              serving.noctaya.io/monitoring-access: "true"
+      ports:
+        - port: http
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: noctaya-allow-monitoring-to-aggregate-scaler
+spec:
+  podSelector:
+    matchExpressions:
+      - key: serving.noctaya.io/scaler
+        operator: Exists
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              serving.noctaya.io/monitoring-access: "true"
+      ports:
+        - port: 9091
+          protocol: TCP

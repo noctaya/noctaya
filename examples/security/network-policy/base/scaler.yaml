@@ -1,0 +1,66 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: noctaya-allow-gateway-to-aggregate-scaler
+spec:
+  podSelector:
+    matchExpressions:
+      - key: serving.noctaya.io/scaler
+        operator: Exists
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: serving.noctaya.io/gateway
+                operator: Exists
+      ports:
+        - port: 9091
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: noctaya-allow-keda-to-gateway-scaler
+spec:
+  podSelector:
+    matchExpressions:
+      - key: serving.noctaya.io/gateway
+        operator: Exists
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: keda
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keda-operator
+      ports:
+        - port: 9090
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: noctaya-allow-keda-to-aggregate-scaler
+spec:
+  podSelector:
+    matchExpressions:
+      - key: serving.noctaya.io/scaler
+        operator: Exists
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: keda
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keda-operator
+      ports:
+        - port: 9090
+          protocol: TCP
