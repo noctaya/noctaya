@@ -92,7 +92,7 @@ test-e2e: kustomize ## Run the External Push lifecycle in an isolated disposable
 		KIND="$(KIND)" \
 		KUBECTL="$(KUBECTL)" \
 		KUSTOMIZE="$(abspath $(KUSTOMIZE))" \
-		bash test/scale-to-zero/run-e2e.sh
+		bash test/e2e/run-e2e.sh
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter

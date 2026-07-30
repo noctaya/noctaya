@@ -16,9 +16,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package scaletozero drives Noctaya's complete no-accelerator lifecycle against
+// Package e2e drives Noctaya's complete no-accelerator lifecycle against
 // a disposable Kind cluster, real manager manifests, KEDA, and a CPU vLLM stub.
-package scaletozero
+package e2e
 
 import (
 	"bytes"
@@ -88,7 +88,7 @@ func mustKubectl(args ...string) string {
 }
 
 func manifestPath(name string) string {
-	return filepath.Join(repoRoot, "test", "scale-to-zero", "data", name)
+	return filepath.Join(repoRoot, "test", "e2e", "testdata", name)
 }
 
 func applyManifest(name string) {
@@ -120,7 +120,7 @@ func applyKustomization(path, targetNamespace string) {
 }
 
 func applyManager() {
-	base := filepath.Join(repoRoot, "test", "scale-to-zero", "kustomize", "base")
+	base := filepath.Join(repoRoot, "test", "e2e", "kustomize", "base")
 	render := exec.Command(kustomize, "build", base)
 	render.Dir = repoRoot
 	objects, err := render.Output()

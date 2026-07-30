@@ -40,7 +40,8 @@ Keep tutorials in the appropriate document under `docs/`, not in this guide.
 | `examples/` | Device profiles and optional integrations |
 | `docs/validation/` | Shared validation requirements and physical-device reports |
 | `docs/noctaya/` | Docusaurus presentation for `noctaya.io` |
-| `test/` | Kind E2E suites and the CPU vLLM stub |
+| `test/e2e/` | Disposable Kind External Push lifecycle |
+| `test/vllm-stub/` | CPU-only vLLM protocol stub |
 
 There is one API group and no webhook. Do not move Kubebuilder-owned files or scaffold APIs or webhooks unless explicitly requested.
 When scaffolding is required, use Kubebuilder and preserve every `+kubebuilder:scaffold:*` marker.
@@ -133,6 +134,7 @@ E2E commands may target only the disposable Kind cluster owned by the runner. Co
 ## Style and completion
 
 - Preserve Apache-2.0 headers and `serving.noctaya.io/*` and `app.kubernetes.io/*` contracts.
+- Use compact lowercase Go package names and lowercase snake_case Go filenames by responsibility. Use lowercase kebab-case for manually maintained non-Go paths unless an ecosystem tool or established contract defines the name.
 - Prefer focused changes; avoid unrelated refactors, dependencies, and generated churn.
 - Comment only non-obvious ownership, lifecycle, Kubernetes, or scale-to-zero decisions.
 - Use structured logging with balanced key/value pairs.

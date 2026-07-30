@@ -69,4 +69,4 @@ KUBECONFIG="${E2E_KUBECONFIG}" \
   NOCTAYA_E2E_MANAGER_IMAGE="${E2E_MANAGER_IMG}" \
   NOCTAYA_E2E_GATEWAY_IMAGE="${E2E_GATEWAY_IMG}" \
   NOCTAYA_E2E_STUB_IMAGE="${E2E_STUB_IMG}" \
-  go test -tags=e2e ./test/scale-to-zero/ -v -ginkgo.v -timeout 20m
+  go test -tags=e2e ./test/e2e/ -v -ginkgo.v -timeout 20m

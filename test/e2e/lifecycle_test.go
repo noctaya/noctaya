@@ -16,7 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package scaletozero
+package e2e
 
 import (
 	"bufio"
@@ -101,7 +101,7 @@ func metricsText(port int) string {
 	return string(content)
 }
 
-var _ = Describe("scale-to-zero loop", Ordered, func() {
+var _ = Describe("External Push lifecycle", Ordered, func() {
 	BeforeAll(func() {
 		applyManifest("runtime.yaml")
 		applyManifest("llmservice.yaml")
