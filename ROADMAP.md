@@ -7,8 +7,8 @@ Noctaya is an alpha Kubernetes control plane for internal, development, and stag
 ### Current boundaries
 
 - Cold starts can take seconds to minutes; latency-sensitive models should use `scaling.min: 1`.
-- The gateway has no built-in authentication and must remain behind a trusted boundary.
-- Multiple gateways use one replaceable per-model demand aggregator; disruption protection and broader failure-injection coverage are still in progress.
+- Gateway API-key authentication is optional; unauthenticated endpoints must remain behind a trusted boundary.
+- Multiple gateways use one replaceable per-model demand aggregator; broader failure-injection coverage is still in progress.
 - Node-local caches are per node; shared and immutable model distribution is not yet available.
 - Hardware support claims remain specific to the validated device, topology, driver, runtime, and image stack.
 
@@ -22,7 +22,8 @@ Noctaya addresses these problems with a small Kubernetes-native lifecycle layer:
 
 - **Declarative serving** — a namespaced `LLMService` selects a reusable, cluster-scoped `InferenceRuntime`, separating model intent from cluster and device configuration.
 - **Scale-to-zero lifecycle** — an always-on gateway exposes an OpenAI-compatible endpoint while independently installed KEDA scales the model backend through `0→1→N→0`.
-- **Cold-start safety** — bounded admission, activation leases, SSE heartbeats, model-aware readiness, and graceful drain protect requests and the gateway throughout activation and scale-down.
+- **Cold-start safety** — configurable bounded admission, activation leases, SSE heartbeats, model-aware readiness, and graceful drain protect requests and the gateway throughout activation and scale-down.
+- **Gateway availability and access** — optional Secret-backed API-key authentication, preferred cross-node placement, and disruption budgets protect public gateway replicas without coupling Noctaya to an ingress implementation.
 - **Model delivery and caching** — Hugging Face, ModelScope, and pre-staged `pvc://` sources work with `HostPath` or `NodeLocalPVC` caches and optional prewarming.
 - **Thin accelerator adaptation** — NVIDIA and Ascend adapters translate the same API into device-specific Kubernetes resources without implementing kernels, runtimes, or device plugins.
 - **Composable operations** — device plugins, KEDA, schedulers such as Volcano, and optional Prometheus and Grafana resources remain independently installed and managed.
@@ -35,15 +36,14 @@ The v0.4.0 goal is to make Noctaya safer and more predictable for controlled, si
 
 ### Security and deployment boundaries
 
-- Add gateway API-key authentication backed by Kubernetes Secrets, including safe secret rotation.
 - Publish NetworkPolicy and TLS-termination guidance for the gateway, backend, metrics, and cluster-internal ExternalScaler endpoint.
 - Review workload security contexts and RBAC, and automate dependency, vulnerability, and release artifact checks.
 
 ### Availability and recovery
 
 - Harden aggregate-scaler replacement and network-failure recovery with broader failure-injection coverage.
-- Add disruption and placement controls, including a `PodDisruptionBudget` and topology-aware spreading.
-- Validate operator leader-election failover and add soak and failure-injection coverage for gateway, operator, backend, and node replacement.
+- Extend placement controls beyond preferred host anti-affinity where accelerator topology requires it.
+- Add longer soak and failure-injection coverage beyond the release-gated gateway, operator, backend, and node replacement paths.
 
 ### Predictable model delivery
 
@@ -54,7 +54,7 @@ The v0.4.0 goal is to make Noctaya safer and more predictable for controlled, si
 ### Production operations
 
 - Define actionable health, queue, activation, rejection, and drain signals with optional alerts and failure runbooks.
-- Validate upgrade, rollback, component replacement, and cluster reboot procedures.
+- Extend release recovery evidence to additional Kubernetes distributions and physical accelerator stacks.
 - Publish release SBOMs and provenance, and evaluate image and chart signing.
 
 ---

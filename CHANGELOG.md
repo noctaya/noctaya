@@ -13,6 +13,11 @@ All notable changes to this project are documented here. The format is based on
 - Added optional `PrometheusRule` examples for queue saturation, activation timeouts, high activation wait, and disconnected External Push streams.
 - Added optional mutual TLS between KEDA and each `LLMService` ExternalScaler using externally managed Secrets and KEDA authentication references.
 - Added an operator-generated per-service token that authenticates bounded demand reports between multiple gateway replicas and their aggregate scaler.
+- Added per-service gateway queue capacity and CPU/memory requests and limits.
+- Added optional Secret-backed Bearer authentication with in-place key rotation for client inference requests.
+- Added preferred hostname anti-affinity and an owned `minAvailable: 1` PodDisruptionBudget for multi-replica gateways.
+- Added a two-replica leader-elected operator topology with preferred cross-node placement and disruption protection.
+- Added an isolated release gate for CRD/chart upgrade, rollback compatibility, component replacement, node restart, and retained evidence.
 
 ### Changed
 - Made KEDA External Push the sole scaler transport. Cold `0→1` activation is streamed immediately, while periodic metric reads remain responsible for recovery and `1→N` scale-out.
@@ -29,6 +34,7 @@ All notable changes to this project are documented here. The format is based on
 - Rendered the complete desired state before mutation, watched owned `ScaledObject` and Secret changes, and kept autoscaling status accurate after partial failures.
 - Collapsed concurrent backend readiness probes and recorded activation latency only for requests that actually waited.
 - Bounded aggregate demand-report size, read time, concurrency, membership, and per-gateway demand.
+- Kept gateway admission capacity and aggregate per-member demand bounds synchronized.
 
 ### Tests
 - Changed the Kind lifecycle to prove activation occurs before a deliberately extended fallback polling interval.
@@ -36,6 +42,8 @@ All notable changes to this project are documented here. The format is based on
 - Added backend Pod replacement coverage for bounded requests, serving recovery, cleared aggregate demand, inactive KEDA state, and return to zero.
 - Added a failing-backend lifecycle that reports `ImagePullFailed`, corrects the runtime, and completes the held inference request without recreating the `LLMService`.
 - Added Kind coverage for NetworkPolicy allow/deny behavior and the complete mutual-TLS External Push lifecycle.
+- Added Kind coverage for queue overflow, client API-key rotation, and voluntary-eviction protection.
+- Added measured operator leader handoff and post-handoff reconciliation coverage on two-worker Kind.
 
 ## [0.4.0-alpha.1] - 2026-07-25
 
