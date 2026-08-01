@@ -59,11 +59,18 @@ Noctaya consumes existing mTLS credentials but does not issue or rotate them. Th
 | `spec.cache.storageClassName` | string | Cluster default | Selects the cache PVC StorageClass |
 | `spec.cache.prewarm` | boolean | `false` | Creates one download Job for `hf://` or `modelscope://` with a persistent cache |
 | `spec.endpoint.openAICompatible` | boolean | `true` | Informational; the gateway currently always serves the OpenAI-compatible API |
+| `spec.endpoint.maxQueue` | integer | `100`; minimum `1` | Maximum admitted requests per gateway replica; overflow returns `429` with `Retry-After` |
+| `spec.endpoint.resources.requests.cpu` / `memory` | quantity | Optional | CPU and memory requested by each gateway replica |
+| `spec.endpoint.resources.limits.cpu` / `memory` | quantity | Optional | CPU and memory limits for each gateway replica |
+| `spec.endpoint.authentication.secretRef.name` | string | Required when authentication is set | References a Secret in the `LLMService` namespace |
+| `spec.endpoint.authentication.secretRef.key` | string | Required when authentication is set | Selects the Secret data key used as the accepted Bearer token |
 | `spec.endpoint.coldStart.mode` | string | `keepalive`; `keepalive` or `reject` | Holds streaming requests with SSE heartbeats or returns `503` with `Retry-After` |
 | `spec.endpoint.coldStart.heartbeatInterval` | positive duration | `10s` | Keepalive heartbeat interval during activation |
 | `spec.imagePullSecrets` | `LocalObjectReference` array | Optional | Applied to backend, gateway, and prewarm Pods; Secrets must be in the service namespace |
 
 Cache PVCs and prewarm Jobs are create-once resources. Delete the Job to prewarm again; preserve needed data before replacing a PVC.
+
+Client authentication is opt-in. When configured, missing or invalid `Authorization: Bearer <key>` credentials on proxied inference routes return `401`. The gateway rereads the mounted Secret file per request, so projected Secret rotation does not recreate the `LLMService` or gateway Pods. `/healthz`, `/metrics`, and `/noctaya/queue` remain unauthenticated and require network isolation.
 
 ### LLMService status
 

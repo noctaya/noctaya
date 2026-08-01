@@ -35,7 +35,11 @@ func (g *Gateway) Handler() http.Handler {
 		_ = json.NewEncoder(w).Encode(map[string]int64{"pending": g.Demand()})
 	})
 	mux.Handle(MetricsPath, promhttp.HandlerFor(g.m.registry, promhttp.HandlerOpts{}))
-	mux.HandleFunc("/", g.serve)
+	mux.HandleFunc("/", func(w http.ResponseWriter, request *http.Request) {
+		if g.authorize(w, request) {
+			g.serve(w, request)
+		}
+	})
 	return mux
 }
 

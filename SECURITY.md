@@ -24,7 +24,8 @@ Include:
 Reports may cover the operator, gateway, APIs, model resolution, generated workloads, Helm and Kustomize packaging, RBAC, official images, and release automation. Report vulnerabilities in Kubernetes, KEDA, inference runtimes, vendor plugins, drivers, device plugins, schedulers, or other third-party components to their upstream projects unless Noctaya's integration creates the
 security impact. If ownership is unclear, report privately here and we will help route it.
 
-The alpha gateway has no built-in authentication. Direct exposure outside a trusted boundary is unsupported.
+Client API-key authentication is optional and disabled by default for compatibility. Configure `spec.endpoint.authentication` and apply NetworkPolicy before exposing a gateway beyond a trusted namespace. Gateway health, metrics, and queue endpoints remain unauthenticated for probes and
+monitoring. See [Optional traffic security](https://github.com/noctaya/noctaya/tree/main/examples/security).
 
 ## Response
 

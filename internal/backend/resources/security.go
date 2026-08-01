@@ -19,6 +19,15 @@ package resources
 import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
+
+	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
+	"github.com/noctaya/noctaya/internal/gateway/proxy"
+)
+
+const (
+	clientAuthVolumeName = "client-auth"
+	clientAuthMountPath  = "/var/run/noctaya/client-auth"
+	clientAPIKeyPath     = clientAuthMountPath + "/api-key"
 )
 
 func disableServiceAccountToken(pod *corev1.PodSpec) {
@@ -44,4 +53,32 @@ func hardenNoctayaContainer(pod *corev1.PodSpec, container *corev1.Container) {
 			Drop: []corev1.Capability{"ALL"},
 		},
 	}
+}
+
+func configureClientAuthentication(
+	pod *corev1.PodSpec,
+	container *corev1.Container,
+	svc *servingv1alpha1.LLMService,
+) {
+	authentication := svc.Spec.Endpoint.Authentication
+	if authentication == nil {
+		return
+	}
+	mode := int32(0o440)
+	pod.Volumes = append(pod.Volumes, corev1.Volume{
+		Name: clientAuthVolumeName,
+		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+			SecretName:  authentication.SecretRef.Name,
+			DefaultMode: &mode,
+			Items: []corev1.KeyToPath{{
+				Key: authentication.SecretRef.Key, Path: "api-key",
+			}},
+		}},
+	})
+	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+		Name: clientAuthVolumeName, MountPath: clientAuthMountPath, ReadOnly: true,
+	})
+	container.Env = append(container.Env, corev1.EnvVar{
+		Name: proxy.EnvClientAPIKeyFile, Value: clientAPIKeyPath,
+	})
 }

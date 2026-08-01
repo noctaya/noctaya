@@ -262,10 +262,63 @@ type EndpointSpec struct {
 	// +optional
 	OpenAICompatible bool `json:"openAICompatible,omitempty"`
 
+	// maxQueue bounds requests admitted by each gateway replica.
+	// +kubebuilder:default=100
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	MaxQueue int32 `json:"maxQueue,omitempty"`
+
+	// resources configures CPU and memory for each gateway replica.
+	// +optional
+	Resources GatewayResourceSpec `json:"resources,omitempty,omitzero"`
+
+	// authentication enables client-facing Bearer authentication.
+	// +optional
+	Authentication *EndpointAuthenticationSpec `json:"authentication,omitempty"`
+
 	// coldStart configures requests received while the backend is unavailable.
 	// +kubebuilder:default={}
 	// +optional
 	ColdStart ColdStartSpec `json:"coldStart,omitempty,omitzero"`
+}
+
+// GatewayResourceSpec configures standard compute requests and limits.
+type GatewayResourceSpec struct {
+	// requests reserves CPU and memory for each gateway replica.
+	// +optional
+	Requests GatewayComputeSpec `json:"requests,omitempty,omitzero"`
+
+	// limits caps CPU and memory for each gateway replica.
+	// +optional
+	Limits GatewayComputeSpec `json:"limits,omitempty,omitzero"`
+}
+
+// GatewayComputeSpec contains the compute resources used by a gateway.
+type GatewayComputeSpec struct {
+	// cpu is a Kubernetes CPU quantity.
+	// +optional
+	CPU *resource.Quantity `json:"cpu,omitempty"`
+
+	// memory is a Kubernetes memory quantity.
+	// +optional
+	Memory *resource.Quantity `json:"memory,omitempty"`
+}
+
+// EndpointAuthenticationSpec configures client-facing API-key authentication.
+type EndpointAuthenticationSpec struct {
+	// secretRef identifies the Secret key containing the accepted Bearer token.
+	SecretRef SecretKeyReference `json:"secretRef"`
+}
+
+// SecretKeyReference identifies one key in a Secret in the LLMService namespace.
+type SecretKeyReference struct {
+	// name is the Secret name.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// key is the data key containing the API key.
+	// +kubebuilder:validation:MinLength=1
+	Key string `json:"key"`
 }
 
 // ColdStartSpec configures how the gateway handles a cold backend.

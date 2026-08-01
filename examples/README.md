@@ -83,6 +83,25 @@ kubectl apply -n ai -f examples/nvidia/a10/serving_v1alpha1_llmservice.yaml
 Use a new service name when changing models because cache PVCs and prewarm Jobs are create-once.
 Change `InferenceRuntime` only when the image, accelerator integration, scheduling, probes, or lifecycle settings must change.
 
+## Tune the gateway
+
+Gateway admission and compute are independent from backend accelerator resources:
+
+```yaml
+spec:
+  endpoint:
+    maxQueue: 100
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: "1"
+        memory: 256Mi
+```
+
+`maxQueue` applies to each gateway replica. Size it for the memory cost of held requests and the amount of cold-start backpressure clients can tolerate. For optional Bearer authentication and network isolation, see [Optional traffic security](https://github.com/noctaya/noctaya/tree/main/examples/security).
+
 ## Optional observability
 
 Noctaya does not install Prometheus or Grafana. The independent
@@ -91,4 +110,4 @@ Noctaya does not install Prometheus or Grafana. The independent
 ## Optional traffic security
 
 Noctaya does not manage network isolation or certificates. The independent
-[`security`](https://github.com/noctaya/noctaya/tree/main/examples/security) package provides opt-in ingress `NetworkPolicy` profiles and KEDA-to-ExternalScaler mutual TLS configuration.
+[`security`](https://github.com/noctaya/noctaya/tree/main/examples/security) package documents client API-key authentication and provides opt-in ingress `NetworkPolicy` profiles and KEDA-to-ExternalScaler mutual TLS configuration.

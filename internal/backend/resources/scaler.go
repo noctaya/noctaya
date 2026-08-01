@@ -48,7 +48,6 @@ const (
 	demandAuthMountPath    = "/var/run/noctaya/demand-auth"
 	demandAuthTokenKey     = "token"
 	demandAuthTokenPath    = demandAuthMountPath + "/" + demandAuthTokenKey
-	defaultGatewayDemand   = 100
 )
 
 func GatewayScalerServiceName(svc *servingv1alpha1.LLMService) string {
@@ -140,7 +139,7 @@ func BuildGatewayScalerDeployment(
 				{Name: scaler.EnvAggregatorListenAddr, Value: fmt.Sprintf(":%d", gatewayAggregatorPort)},
 				{Name: scaler.EnvListenAddr, Value: fmt.Sprintf(":%d", gatewayScalerPort)},
 				{Name: scaler.EnvMaxGatewayMembers, Value: strconv.FormatInt(max(16, int64(gatewayReplicas)*4), 10)},
-				{Name: scaler.EnvMaxGatewayDemand, Value: strconv.Itoa(defaultGatewayDemand)},
+				{Name: scaler.EnvMaxGatewayDemand, Value: strconv.FormatInt(int64(gatewayMaxQueue(svc)), 10)},
 			},
 			Ports: []corev1.ContainerPort{
 				{Name: portNameGRPC, ContainerPort: gatewayScalerPort, Protocol: corev1.ProtocolTCP},

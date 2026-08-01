@@ -22,7 +22,10 @@ import (
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
 	"github.com/noctaya/noctaya/internal/backend/resources"
@@ -106,6 +109,129 @@ func TestGatewayPointsAtBackendService(t *testing.T) {
 		}
 	}
 	g.Expect(backendURL).To(Equal("http://qwen3-8b-backend.ai.svc:80"))
+}
+
+func TestGatewayQueueCapacityDefaultAndOverride(t *testing.T) {
+	g := NewWithT(t)
+	svc := gatewaySvc()
+
+	deployment, err := resources.BuildGatewayDeployment(svc, "img", 2)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(deployment.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+		Name: "NOCTAYA_MAX_QUEUE", Value: "100",
+	}))
+	g.Expect(resources.BuildGatewayScalerDeployment(svc, "img", 2).
+		Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+		Name: "NOCTAYA_MAX_GATEWAY_DEMAND", Value: "100",
+	}))
+
+	svc.Spec.Endpoint.MaxQueue = 7
+	deployment, err = resources.BuildGatewayDeployment(svc, "img", 2)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(deployment.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+		Name: "NOCTAYA_MAX_QUEUE", Value: "7",
+	}))
+	g.Expect(resources.BuildGatewayScalerDeployment(svc, "img", 2).
+		Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+		Name: "NOCTAYA_MAX_GATEWAY_DEMAND", Value: "7",
+	}))
+}
+
+func TestGatewayComputeResources(t *testing.T) {
+	g := NewWithT(t)
+	svc := gatewaySvc()
+
+	deployment, err := resources.BuildGatewayDeployment(svc, "img", 1)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(deployment.Spec.Template.Spec.Containers[0].Resources).
+		To(Equal(corev1.ResourceRequirements{}))
+
+	requestCPU := resource.MustParse("100m")
+	requestMemory := resource.MustParse("128Mi")
+	svc.Spec.Endpoint.Resources.Requests = servingv1alpha1.GatewayComputeSpec{
+		CPU: &requestCPU, Memory: &requestMemory,
+	}
+	deployment, err = resources.BuildGatewayDeployment(svc, "img", 1)
+	g.Expect(err).NotTo(HaveOccurred())
+	containerResources := deployment.Spec.Template.Spec.Containers[0].Resources
+	g.Expect(containerResources.Requests).To(Equal(corev1.ResourceList{
+		corev1.ResourceCPU: requestCPU, corev1.ResourceMemory: requestMemory,
+	}))
+	g.Expect(containerResources.Limits).To(BeNil())
+
+	limitCPU := resource.MustParse("1")
+	limitMemory := resource.MustParse("256Mi")
+	svc.Spec.Endpoint.Resources.Limits = servingv1alpha1.GatewayComputeSpec{
+		CPU: &limitCPU, Memory: &limitMemory,
+	}
+	deployment, err = resources.BuildGatewayDeployment(svc, "img", 1)
+	g.Expect(err).NotTo(HaveOccurred())
+	containerResources = deployment.Spec.Template.Spec.Containers[0].Resources
+	g.Expect(containerResources.Requests).To(Equal(corev1.ResourceList{
+		corev1.ResourceCPU: requestCPU, corev1.ResourceMemory: requestMemory,
+	}))
+	g.Expect(containerResources.Limits).To(Equal(corev1.ResourceList{
+		corev1.ResourceCPU: limitCPU, corev1.ResourceMemory: limitMemory,
+	}))
+}
+
+func TestGatewayClientAuthenticationSecretMount(t *testing.T) {
+	g := NewWithT(t)
+	svc := gatewaySvc()
+
+	deployment, err := resources.BuildGatewayDeployment(svc, "img", 1)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(deployment.Spec.Template.Spec.Volumes).To(BeEmpty())
+	g.Expect(deployment.Spec.Template.Spec.Containers[0].Env).
+		NotTo(ContainElement(HaveField("Name", "NOCTAYA_CLIENT_API_KEY_FILE")))
+
+	svc.Spec.Endpoint.Authentication = &servingv1alpha1.EndpointAuthenticationSpec{
+		SecretRef: servingv1alpha1.SecretKeyReference{Name: "model-client", Key: "token"},
+	}
+	deployment, err = resources.BuildGatewayDeployment(svc, "img", 1)
+	g.Expect(err).NotTo(HaveOccurred())
+	pod := deployment.Spec.Template.Spec
+	g.Expect(pod.Volumes).To(ContainElement(And(
+		HaveField("Name", "client-auth"),
+		HaveField("VolumeSource.Secret.SecretName", "model-client"),
+		HaveField("VolumeSource.Secret.Items", []corev1.KeyToPath{{Key: "token", Path: "api-key"}}),
+	)))
+	g.Expect(pod.Containers[0].VolumeMounts).To(ContainElement(corev1.VolumeMount{
+		Name: "client-auth", MountPath: "/var/run/noctaya/client-auth", ReadOnly: true,
+	}))
+	g.Expect(pod.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+		Name: "NOCTAYA_CLIENT_API_KEY_FILE", Value: "/var/run/noctaya/client-auth/api-key",
+	}))
+}
+
+func TestMultipleGatewayAvailabilityPolicy(t *testing.T) {
+	g := NewWithT(t)
+	svc := gatewaySvc()
+
+	single, err := resources.BuildGatewayDeployment(svc, "img", 1)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(single.Spec.Template.Spec.Affinity).To(BeNil())
+	g.Expect(resources.BuildGatewayPodDisruptionBudget(svc, 1)).To(BeNil())
+
+	multiple, err := resources.BuildGatewayDeployment(svc, "img", 2)
+	g.Expect(err).NotTo(HaveOccurred())
+	antiAffinity := multiple.Spec.Template.Spec.Affinity.PodAntiAffinity.
+		PreferredDuringSchedulingIgnoredDuringExecution
+	g.Expect(antiAffinity).To(HaveLen(1))
+	g.Expect(antiAffinity[0].Weight).To(Equal(int32(100)))
+	g.Expect(antiAffinity[0].PodAffinityTerm.TopologyKey).To(Equal(corev1.LabelHostname))
+	g.Expect(antiAffinity[0].PodAffinityTerm.LabelSelector.MatchLabels).
+		To(Equal(multiple.Spec.Selector.MatchLabels))
+
+	pdb := resources.BuildGatewayPodDisruptionBudget(svc, 2)
+	g.Expect(pdb.APIVersion).To(Equal("policy/v1"))
+	g.Expect(pdb.Kind).To(Equal("PodDisruptionBudget"))
+	g.Expect(pdb.Name).To(Equal("qwen3-8b-gateway"))
+	g.Expect(pdb.Spec.MinAvailable.Type).To(Equal(intstr.Int))
+	g.Expect(pdb.Spec.MinAvailable.IntVal).To(Equal(int32(1)))
+	g.Expect(pdb.Spec.Selector.MatchLabels).To(Equal(multiple.Spec.Selector.MatchLabels))
+	g.Expect(pdb.Spec.UnhealthyPodEvictionPolicy).To(BeNil())
+	g.Expect(pdb.Status).To(Equal(policyv1.PodDisruptionBudgetStatus{}))
 }
 
 func TestSingleGatewayExposesCoLocatedScaler(t *testing.T) {

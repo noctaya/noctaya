@@ -63,7 +63,12 @@ func New(cfg Config) (*Gateway, error) {
 		return nil, fmt.Errorf("backend URL must be an absolute HTTP URL")
 	}
 	if cfg.MaxQueue <= 0 {
-		cfg.MaxQueue = 100
+		cfg.MaxQueue = DefaultMaxQueue
+	}
+	if cfg.ClientAPIKeyFile != "" {
+		if _, err := readClientAPIKey(cfg.ClientAPIKeyFile); err != nil {
+			return nil, err
+		}
 	}
 	if cfg.ActivationTimeout <= 0 {
 		cfg.ActivationTimeout = 5 * time.Minute

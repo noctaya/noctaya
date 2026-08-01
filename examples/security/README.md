@@ -4,6 +4,33 @@ Noctaya does not manage cluster networking or certificates. These opt-in profile
 
 For multiple gateway replicas, Noctaya automatically creates a per-`LLMService` Secret that authenticates gateway demand reports to the aggregate scaler. NetworkPolicy remains necessary to restrict which workloads can reach that internal endpoint.
 
+## Client API key
+
+Create a Secret in the `LLMService` namespace:
+
+```bash
+kubectl create secret generic qwen-client-auth \
+  --namespace ai \
+  --from-literal=api-key='<random-api-key>'
+```
+
+Reference only its name and key:
+
+```yaml
+spec:
+  endpoint:
+    authentication:
+      secretRef:
+        name: qwen-client-auth
+        key: api-key
+```
+
+Inference requests must then include `Authorization: Bearer <random-api-key>`. Missing or invalid credentials return `401` with a Bearer challenge. The gateway removes the client credential before forwarding the request to the model backend.
+
+Rotate the existing Secret to change the key. The kubelet refreshes the projected volume, and each gateway rereads it per request; no `LLMService` edit or Pod restart is required. The controller does not read, watch, or copy the referenced client credential.
+
+`/healthz`, `/metrics`, and `/noctaya/queue` remain unauthenticated for Kubernetes probes and monitoring. Protect these paths with NetworkPolicy or an authenticated ingress. ExternalScaler and multi-gateway demand-report authentication are separate trust boundaries.
+
 ## NetworkPolicy
 
 The base profile permits only:

@@ -90,6 +90,28 @@ spec:
                 default: {}
                 description: endpoint configures client-facing cold-start behavior.
                 properties:
+                  authentication:
+                    description: authentication enables client-facing Bearer authentication.
+                    properties:
+                      secretRef:
+                        description: secretRef identifies the Secret key containing
+                          the accepted Bearer token.
+                        properties:
+                          key:
+                            description: key is the data key containing the API key.
+                            minLength: 1
+                            type: string
+                          name:
+                            description: name is the Secret name.
+                            minLength: 1
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                    required:
+                    - secretRef
+                    type: object
                   coldStart:
                     default: {}
                     description: coldStart configures requests received while the
@@ -114,12 +136,61 @@ spec:
                     - message: heartbeatInterval must be greater than zero
                       rule: '!has(self.heartbeatInterval) || duration(self.heartbeatInterval)
                         > duration(''0s'')'
+                  maxQueue:
+                    default: 100
+                    description: maxQueue bounds requests admitted by each gateway
+                      replica.
+                    format: int32
+                    minimum: 1
+                    type: integer
                   openAICompatible:
                     default: true
                     description: |-
                       openAICompatible is informational in v0: the gateway always serves the
                       OpenAI-compatible API. Reserved for future protocol selection.
                     type: boolean
+                  resources:
+                    description: resources configures CPU and memory for each gateway
+                      replica.
+                    properties:
+                      limits:
+                        description: limits caps CPU and memory for each gateway replica.
+                        properties:
+                          cpu:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            description: cpu is a Kubernetes CPU quantity.
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          memory:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            description: memory is a Kubernetes memory quantity.
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                        type: object
+                      requests:
+                        description: requests reserves CPU and memory for each gateway
+                          replica.
+                        properties:
+                          cpu:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            description: cpu is a Kubernetes CPU quantity.
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          memory:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            description: memory is a Kubernetes memory quantity.
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                        type: object
+                    type: object
                 type: object
               imagePullSecrets:
                 description: |-

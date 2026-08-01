@@ -31,8 +31,10 @@ const (
 	EnvGatewayID           = "NOCTAYA_GATEWAY_ID"
 	EnvColdStartMode       = "NOCTAYA_COLDSTART_MODE"
 	EnvHeartbeatInterval   = "NOCTAYA_HEARTBEAT_INTERVAL"
+	EnvClientAPIKeyFile    = "NOCTAYA_CLIENT_API_KEY_FILE"
 
 	DefaultListenAddr = ":8080"
+	DefaultMaxQueue   = 100
 	QueuePath         = "/noctaya/queue"
 	MetricsPath       = "/metrics"
 
@@ -47,14 +49,16 @@ type Config struct {
 	RetryInterval     time.Duration
 	ColdStartMode     string
 	HeartbeatInterval time.Duration
+	ClientAPIKeyFile  string
 	// ActivationGracePeriod prevents immediate scale-down while reject-mode clients retry.
 	ActivationGracePeriod time.Duration
 }
 
 func ConfigFromEnv() Config {
 	cfg := Config{
-		BackendURL:    os.Getenv(EnvBackendURL),
-		ColdStartMode: os.Getenv(EnvColdStartMode),
+		BackendURL:       os.Getenv(EnvBackendURL),
+		ColdStartMode:    os.Getenv(EnvColdStartMode),
+		ClientAPIKeyFile: os.Getenv(EnvClientAPIKeyFile),
 	}
 	if value, err := strconv.Atoi(os.Getenv(EnvMaxQueue)); err == nil {
 		cfg.MaxQueue = value
