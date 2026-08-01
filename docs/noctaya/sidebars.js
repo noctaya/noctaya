@@ -47,6 +47,11 @@ const sidebars = {
       label: 'Test without an accelerator',
     },
     {
+      type: 'doc',
+      id: 'docs/validation/releases',
+      label: 'Release validation',
+    },
+    {
       type: 'category',
       label: 'Hardware validation',
       collapsed: true,

@@ -45,19 +45,33 @@ The runner refuses to reuse an existing cluster with that name or overwrite its 
 
 The suite verifies:
 
+- two-replica operator placement, disruption protection, measured leader handoff, and continued reconciliation;
 - idle backend scale-to-zero;
 - cold activation and streaming completion;
 - concurrent scale-out through `0 → 1 → 2 → 0`;
 - aggregate demand from two gateways during gateway replacement;
+- PodDisruptionBudget enforcement during voluntary gateway eviction;
+- configurable queue overflow with `429` and `Retry-After`;
+- Secret-backed client authentication, negative paths, and in-place key rotation;
 - backend Pod replacement, request recovery, and return to zero;
 - backend image-pull failure reporting and recovery after correcting the runtime;
 - graceful drain of an active stream;
-- fast cold-start rejection with `503`; and
+- fast cold-start rejection with `503`;
 - push activation before the fallback polling interval;
-- allowed and denied traffic through the opt-in ingress `NetworkPolicy` profile; and
+- allowed and denied traffic through the opt-in ingress `NetworkPolicy` profile;
 - KEDA External Push over mutual TLS, including rejection of a plaintext scaler client.
 
 CI runs the same lifecycle through `.github/workflows/test-e2e.yml`.
+
+## Run the release gate
+
+Use the last compatible published chart to validate upgrade, rollback, component replacement, and node recovery:
+
+```bash
+make test-release
+```
+
+The runner owns `noctaya-test-release`, refuses shared contexts, and writes its evidence to `bin/release-validation/` before cleanup. See [Release validation](validation/releases.md) for the complete release checklist and physical-accelerator requirement.
 
 ## Use Podman
 
@@ -65,6 +79,7 @@ Select Podman for both the image build and the Kind provider:
 
 ```bash
 KIND_EXPERIMENTAL_PROVIDER=podman make test-e2e CONTAINER_TOOL=podman
+KIND_EXPERIMENTAL_PROVIDER=podman make test-release CONTAINER_TOOL=podman
 ```
 
 ## CPU vLLM stub

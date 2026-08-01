@@ -61,6 +61,7 @@ Run the checks relevant to the completed change:
 | Documentation or website | `make test-docs` |
 | Helm chart | `helm lint charts/noctaya` and `helm template noctaya charts/noctaya --namespace noctaya-system >/dev/null` |
 | KEDA activation or scale-down | `make test-e2e` |
+| Upgrade, rollback, or component recovery | `make test-release` |
 
 The E2E runner owns an isolated Kind cluster and refuses to reuse an existing one. Never point it at development, staging, or production clusters. Most work can be tested without an accelerator; see [Developing without an accelerator](docs/no-gpu.md).
 

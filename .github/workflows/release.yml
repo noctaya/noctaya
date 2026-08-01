@@ -11,6 +11,10 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  KIND_VERSION: v0.32.0
+  RELEASE_PREVIOUS_VERSION: 0.4.0-alpha.1
+
 jobs:
   validate:
     name: Validate release
@@ -49,9 +53,52 @@ jobs:
           helm lint charts/noctaya
           helm template noctaya charts/noctaya --namespace noctaya-system >/dev/null
 
+  release-validation:
+    name: Validate upgrade and recovery
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      - name: Install Kind
+        run: |
+          ARCH="$(go env GOARCH)"
+          URL="https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-${ARCH}"
+          curl --fail --show-error --location --output kind "${URL}"
+          curl --fail --show-error --location --output kind.sha256sum "${URL}.sha256sum"
+          echo "$(cut -d ' ' -f 1 kind.sha256sum)  kind" | sha256sum --check -
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+
+      - name: Run release validation
+        run: make test-release
+
+      - name: Upload release-validation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-validation-${{ github.ref_name }}
+          path: bin/release-validation
+          if-no-files-found: error
+          retention-days: 30
+
   images:
     name: Publish container images
-    needs: validate
+    needs: [validate, release-validation]
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:

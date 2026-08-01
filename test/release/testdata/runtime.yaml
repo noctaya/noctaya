@@ -1,0 +1,41 @@
+apiVersion: serving.noctaya.io/v1alpha1
+kind: InferenceRuntime
+metadata:
+  name: release-vllm-stub
+spec:
+  family: vllm
+  vendor: nvidia
+  priority: 100
+  container:
+    image: noctaya.io/vllm-stub:e2e
+    args:
+      - --model={{ .Model.Path }}
+      - --served-model-name={{ .Service.Name }}
+    env:
+      - name: STUB_STARTUP_DELAY
+        value: "2s"
+      - name: STUB_TOKEN_COUNT
+        value: "5"
+      - name: STUB_TOKEN_DELAY
+        value: "100ms"
+    port:
+      name: http
+      containerPort: 8000
+  accelerator:
+    resourceName: noctaya.io/fake-gpu
+    sharing:
+      supported: false
+  health:
+    readiness:
+      httpGet:
+        path: /health
+        port: http
+    startup:
+      httpGet:
+        path: /health
+        port: http
+      periodSeconds: 1
+      failureThreshold: 60
+  lifecycle:
+    terminationGracePeriodSeconds: 20
+    preStopDrain: true

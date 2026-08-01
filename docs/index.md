@@ -14,6 +14,7 @@ backend that can scale to zero, optional model caching and prewarming, and KEDA 
 
 - [Testing without an accelerator](no-gpu.md) exercises the control plane and scale-to-zero path on Kind.
 - [Hardware validation](validation/requirements.md) explains the evidence required for physical accelerator claims.
+- [Release validation](validation/releases.md) defines upgrade, rollback, recovery, and candidate evidence gates.
 
 ## Project
 

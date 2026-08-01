@@ -41,6 +41,7 @@ Keep tutorials in the appropriate document under `docs/`, not in this guide.
 | `docs/validation/` | Shared validation requirements and physical-device reports |
 | `docs/noctaya/` | Docusaurus presentation for `noctaya.io` |
 | `test/e2e/` | Disposable Kind External Push lifecycle |
+| `test/release/` | Disposable Kind upgrade, rollback, replacement, and node-recovery gate |
 | `test/vllm-stub/` | CPU-only vLLM protocol stub |
 
 There is one API group and no webhook. Do not move Kubebuilder-owned files or scaffold APIs or webhooks unless explicitly requested.
@@ -128,6 +129,7 @@ Use the Go version in `go.mod`. Prefer the closest package test while iterating;
 | `make lint-fix` | Apply supported fixes; inspect every edit |
 | `make test-docs` | Install pinned Node dependencies and build Docusaurus |
 | `make test-e2e` | Run the External Push lifecycle on an isolated Kind cluster |
+| `make test-release` | Validate release upgrade, rollback, replacement, and recovery on isolated Kind |
 
 E2E commands may target only the disposable Kind cluster owned by the runner. Confirm the kube-context and never target development, staging, or production.
 

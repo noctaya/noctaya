@@ -63,6 +63,11 @@ E2E_MANAGER_IMG ?= noctaya.io/noctaya:e2e
 E2E_GATEWAY_IMG ?= noctaya.io/noctaya-gateway:e2e
 E2E_STUB_IMG ?= noctaya.io/vllm-stub:e2e
 E2E_ARCHIVE_DIR ?= $(abspath $(LOCALBIN)/e2e-images)
+RELEASE_KIND_CLUSTER ?= noctaya-test-release
+RELEASE_KUBECONFIG ?= $(abspath $(LOCALBIN)/noctaya-test-release.kubeconfig)
+RELEASE_PREVIOUS_VERSION ?= 0.4.0-alpha.1
+RELEASE_PREVIOUS_CHART ?= https://github.com/noctaya/noctaya/releases/download/v$(RELEASE_PREVIOUS_VERSION)/noctaya-$(RELEASE_PREVIOUS_VERSION).tgz
+RELEASE_EVIDENCE_DIR ?= $(abspath $(LOCALBIN)/release-validation)
 
 .PHONY: load-e2e-images
 load-e2e-images:
@@ -93,6 +98,24 @@ test-e2e: kustomize ## Run the External Push lifecycle in an isolated disposable
 		KUBECTL="$(KUBECTL)" \
 		KUSTOMIZE="$(abspath $(KUSTOMIZE))" \
 		bash test/e2e/run-e2e.sh
+
+.PHONY: test-release
+test-release: ## Validate upgrade, rollback, replacement, and node recovery on disposable Kind.
+	@CONTAINER_TOOL="$(CONTAINER_TOOL)" \
+		E2E_GATEWAY_IMG="$(E2E_GATEWAY_IMG)" \
+		E2E_KEDA_VERSION="$(E2E_KEDA_VERSION)" \
+		E2E_MANAGER_IMG="$(E2E_MANAGER_IMG)" \
+		E2E_STUB_IMG="$(E2E_STUB_IMG)" \
+		HELM="$(HELM)" \
+		KIND="$(KIND)" \
+		KUBECTL="$(KUBECTL)" \
+		RELEASE_CANDIDATE_CHART="$(abspath charts/noctaya)" \
+		RELEASE_EVIDENCE_DIR="$(RELEASE_EVIDENCE_DIR)" \
+		RELEASE_KIND_CLUSTER="$(RELEASE_KIND_CLUSTER)" \
+		RELEASE_KUBECONFIG="$(RELEASE_KUBECONFIG)" \
+		RELEASE_PREVIOUS_CHART="$(RELEASE_PREVIOUS_CHART)" \
+		RELEASE_PREVIOUS_VERSION="$(RELEASE_PREVIOUS_VERSION)" \
+		bash test/release/run-release.sh
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
