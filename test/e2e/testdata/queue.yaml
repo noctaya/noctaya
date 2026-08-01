@@ -1,0 +1,50 @@
+apiVersion: serving.noctaya.io/v1alpha1
+kind: InferenceRuntime
+metadata:
+  name: vllm-stub-queue
+spec:
+  family: vllm
+  vendor: nvidia
+  container:
+    image: noctaya.io/vllm-stub:e2e
+    args:
+      - --model={{ .Model.Path }}
+    port:
+      name: http
+      containerPort: 8000
+  accelerator:
+    resourceName: noctaya.io/unavailable-gpu
+  health:
+    readiness:
+      httpGet:
+        path: /health
+        port: http
+---
+apiVersion: serving.noctaya.io/v1alpha1
+kind: LLMService
+metadata:
+  name: stub-queue
+  namespace: noctaya-e2e
+spec:
+  model:
+    source:
+      uri: hf://noctaya/stub-model
+  runtime:
+    name: vllm-stub-queue
+  resources:
+    accelerators: 1
+    cpu: "100m"
+    memory: 128Mi
+  scaling:
+    min: 0
+    max: 1
+    metric: queueDepth
+    target: 1
+    activationTimeout: 10s
+  cache:
+    strategy: None
+  endpoint:
+    maxQueue: 1
+    coldStart:
+      mode: keepalive
+      heartbeatInterval: 2s

@@ -1,0 +1,39 @@
+apiVersion: serving.noctaya.io/v1alpha1
+kind: LLMService
+metadata:
+  name: stub-auth
+  namespace: noctaya-e2e
+spec:
+  model:
+    source:
+      uri: hf://noctaya/stub-model
+  runtime:
+    name: vllm-stub
+  resources:
+    accelerators: 1
+    cpu: "100m"
+    memory: 128Mi
+  scaling:
+    min: 0
+    max: 1
+    metric: queueDepth
+    target: 1
+    activationTimeout: 2m
+    scaleDownStabilization: 15s
+  cache:
+    strategy: None
+  endpoint:
+    maxQueue: 4
+    resources:
+      requests:
+        cpu: "25m"
+        memory: 32Mi
+      limits:
+        memory: 64Mi
+    authentication:
+      secretRef:
+        name: stub-auth-client
+        key: api-key
+    coldStart:
+      mode: keepalive
+      heartbeatInterval: 2s

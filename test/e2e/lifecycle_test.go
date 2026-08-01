@@ -21,6 +21,8 @@ package e2e
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -43,6 +45,16 @@ type chatResult struct {
 }
 
 func chat(port, tokens int, stream bool, timeout time.Duration, firstToken chan<- struct{}) (int, string, error) {
+	return chatWithAPIKey(port, tokens, stream, timeout, firstToken, "")
+}
+
+func chatWithAPIKey(
+	port, tokens int,
+	stream bool,
+	timeout time.Duration,
+	firstToken chan<- struct{},
+	apiKey string,
+) (int, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -56,6 +68,9 @@ func chat(port, tokens int, stream bool, timeout time.Duration, firstToken chan<
 		return 0, "", err
 	}
 	request.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		request.Header.Set("Authorization", "Bearer "+apiKey)
+	}
 	response, err := httpClient.Do(request)
 	if err != nil {
 		return 0, "", err
@@ -86,6 +101,30 @@ func chat(port, tokens int, stream bool, timeout time.Duration, firstToken chan<
 
 func requestChat(port, tokens int, stream bool, timeout time.Duration) (int, string, error) {
 	return chat(port, tokens, stream, timeout, nil)
+}
+
+func requestChatWithAPIKey(
+	port, tokens int,
+	stream bool,
+	timeout time.Duration,
+	apiKey string,
+) (int, string, error) {
+	return chatWithAPIKey(port, tokens, stream, timeout, nil, apiKey)
+}
+
+func queueDepth(port int) int64 {
+	response, err := httpClient.Get(fmt.Sprintf("http://127.0.0.1:%d/noctaya/queue", port))
+	if err != nil {
+		return -1
+	}
+	defer func() { _ = response.Body.Close() }()
+	var body struct {
+		Pending int64 `json:"pending"`
+	}
+	if json.NewDecoder(response.Body).Decode(&body) != nil {
+		return -1
+	}
+	return body.Pending
 }
 
 func metricsText(port int) string {
@@ -146,6 +185,211 @@ var _ = Describe("External Push lifecycle", Ordered, func() {
 		Eventually(metricsText, time.Minute, 2*time.Second).
 			WithArguments(forward.port).
 			Should(ContainSubstring("noctaya_scaler_gateway_members 2"))
+	})
+
+	It("hands operator leadership to a healthy standby", func() {
+		Eventually(func() int {
+			pods, _ := managerPods()
+			ready := 0
+			for i := range pods {
+				for _, condition := range pods[i].Status.Conditions {
+					if condition.Type == "Ready" && condition.Status == "True" {
+						ready++
+						break
+					}
+				}
+			}
+			return ready
+		}, 2*time.Minute, time.Second).Should(Equal(2))
+
+		pods, err := managerPods()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(pods).To(HaveLen(2))
+		Expect(pods[0].Spec.NodeName).NotTo(BeEmpty())
+		Expect(pods[1].Spec.NodeName).NotTo(BeEmpty())
+		Expect(pods[0].Spec.NodeName).NotTo(Equal(pods[1].Spec.NodeName),
+			"preferred hostname anti-affinity should spread two managers on this two-node cluster")
+
+		Eventually(func() string {
+			output, _ := kubectl(
+				"get", "poddisruptionbudget", managerDeployment, "-n", managerNamespace,
+				"-o", "jsonpath={.status.disruptionsAllowed}",
+			)
+			return output
+		}, time.Minute, time.Second).Should(Equal("1"))
+		Expect(mustKubectl(
+			"get", "poddisruptionbudget", managerDeployment, "-n", managerNamespace,
+			"-o", "jsonpath={.spec.minAvailable}",
+		)).To(Equal("1"))
+
+		holder, err := leaderHolder()
+		Expect(err).NotTo(HaveOccurred())
+		active := holderPod(holder, pods)
+		Expect(active).NotTo(BeEmpty(), "lease holder %q must identify one manager pod", holder)
+		standby := pods[0].Name
+		if standby == active {
+			standby = pods[1].Name
+		}
+
+		managerNodes := []string{pods[0].Spec.NodeName, pods[1].Spec.NodeName}
+		for _, node := range managerNodes {
+			mustKubectl("cordon", node)
+		}
+		nodesCordoned := true
+		DeferCleanup(func() {
+			if nodesCordoned {
+				for _, node := range managerNodes {
+					mustKubectl("uncordon", node)
+				}
+			}
+		})
+
+		mustKubectl(
+			"patch", "llmservice", "stub-svc", "-n", namespace,
+			"--type=merge", "-p", `{"spec":{"scaling":{"target":2}}}`,
+		)
+		generation := mustKubectl(
+			"get", "llmservice", "stub-svc", "-n", namespace,
+			"-o", "jsonpath={.metadata.generation}",
+		)
+
+		started := time.Now()
+		mustKubectl("delete", "pod", active, "-n", managerNamespace, "--wait=false")
+		Eventually(func() string {
+			current, getErr := leaderHolder()
+			if getErr != nil {
+				return ""
+			}
+			currentPods, podsErr := managerPods()
+			if podsErr != nil {
+				return ""
+			}
+			return holderPod(current, currentPods)
+		}, 30*time.Second, 250*time.Millisecond).Should(Equal(standby))
+		handoff := time.Since(started)
+		Expect(handoff).To(BeNumerically("<=", 30*time.Second))
+		_, _ = fmt.Fprintf(
+			GinkgoWriter,
+			"Operator leader handoff completed in %s (%s -> %s)\n",
+			handoff.Round(time.Millisecond), active, standby,
+		)
+
+		Eventually(func() string {
+			output, _ := kubectl(
+				"get", "scaledobject", "stub-svc", "-n", namespace,
+				"-o", "jsonpath={.spec.triggers[0].metadata.targetValue}",
+			)
+			return output
+		}, time.Minute, time.Second).Should(Equal("2"))
+		Eventually(func() string {
+			output, _ := kubectl(
+				"get", "llmservice", "stub-svc", "-n", namespace,
+				"-o", `jsonpath={.status.conditions[?(@.type=="AutoscalingReady")].observedGeneration}`,
+			)
+			return output
+		}, time.Minute, time.Second).Should(Equal(generation))
+
+		for _, resource := range []string{
+			"deployment/stub-svc",
+			"deployment/stub-svc-gateway",
+			"deployment/stub-svc-scaler",
+			"service/stub-svc",
+			"service/stub-svc-backend",
+			"service/stub-svc-scaler",
+			"scaledobject/stub-svc",
+		} {
+			Expect(strings.Fields(mustKubectl(
+				"get", resource, "-n", namespace, "-o", "name",
+			))).To(HaveLen(1), resource+" must not be duplicated after handoff")
+		}
+
+		mustKubectl(
+			"patch", "llmservice", "stub-svc", "-n", namespace,
+			"--type=merge", "-p", `{"spec":{"scaling":{"target":1}}}`,
+		)
+		Eventually(func() string {
+			output, _ := kubectl(
+				"get", "scaledobject", "stub-svc", "-n", namespace,
+				"-o", "jsonpath={.spec.triggers[0].metadata.targetValue}",
+			)
+			return output
+		}, time.Minute, time.Second).Should(Equal("1"))
+
+		for _, node := range managerNodes {
+			mustKubectl("uncordon", node)
+		}
+		nodesCordoned = false
+		Eventually(func() int {
+			current, _ := managerPods()
+			return len(current)
+		}, 2*time.Minute, time.Second).Should(Equal(2))
+	})
+
+	It("protects gateway availability during voluntary eviction", func() {
+		Eventually(func() string {
+			output, _ := kubectl(
+				"get", "poddisruptionbudget", "stub-svc-gateway", "-n", namespace,
+				"-o", "jsonpath={.status.disruptionsAllowed}",
+			)
+			return output
+		}, time.Minute, time.Second).Should(Equal("1"))
+		minAvailable := mustKubectl(
+			"get", "poddisruptionbudget", "stub-svc-gateway", "-n", namespace,
+			"-o", "jsonpath={.spec.minAvailable}",
+		)
+		Expect(minAvailable).To(Equal("1"))
+
+		nodes := strings.Fields(mustKubectl(
+			"get", "nodes", "-o", "jsonpath={.items[*].metadata.name}",
+		))
+		Expect(nodes).NotTo(BeEmpty())
+		for _, node := range nodes {
+			mustKubectl("cordon", node)
+		}
+		nodesCordoned := true
+		DeferCleanup(func() {
+			if nodesCordoned {
+				for _, node := range nodes {
+					mustKubectl("uncordon", node)
+				}
+			}
+			output, err := kubectl(
+				"rollout", "status", "deployment/stub-svc-gateway",
+				"-n", namespace, "--timeout=120s",
+			)
+			Expect(err).NotTo(HaveOccurred(), output)
+		})
+
+		pods, err := gatewayPodNames("stub-svc")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(pods).To(HaveLen(2))
+		evictedPod, protectedPod := pods[0], pods[1]
+		output, err := evictPod(evictedPod)
+		Expect(err).NotTo(HaveOccurred(), output)
+		Eventually(func() []string {
+			current, _ := gatewayPodNames("stub-svc")
+			return current
+		}, time.Minute, time.Second).ShouldNot(ContainElement(evictedPod))
+		Eventually(func() string {
+			output, _ := kubectl(
+				"get", "poddisruptionbudget", "stub-svc-gateway", "-n", namespace,
+				"-o", "jsonpath={.status.disruptionsAllowed}",
+			)
+			return output
+		}, time.Minute, time.Second).Should(Equal("0"))
+
+		output, err = evictPod(protectedPod)
+		Expect(err).To(HaveOccurred())
+		Expect(strings.ToLower(output)).To(ContainSubstring("disruption budget"))
+
+		for _, node := range nodes {
+			mustKubectl("uncordon", node)
+		}
+		nodesCordoned = false
+		Eventually(func() int {
+			pods, _ := gatewayPodNames("stub-svc")
+			return len(pods)
+		}, 2*time.Minute, time.Second).Should(Equal(2))
 	})
 
 	It("enforces the opt-in NetworkPolicy profile", func() {
@@ -209,7 +453,7 @@ var _ = Describe("External Push lifecycle", Ordered, func() {
 			return output
 		}, time.Minute, time.Second).Should(Or(BeEmpty(), Equal("0")))
 		DeferCleanup(func() {
-			mustKubectl("scale", "deployment/"+managerDeployment, "-n", managerNamespace, "--replicas=1")
+			mustKubectl("scale", "deployment/"+managerDeployment, "-n", managerNamespace, "--replicas=2")
 			output, err := kubectl("rollout", "status", "deployment/"+managerDeployment,
 				"-n", managerNamespace, "--timeout=180s")
 			Expect(err).NotTo(HaveOccurred(), output)
@@ -410,6 +654,123 @@ var _ = Describe("External Push lifecycle", Ordered, func() {
 		code, _, err := requestChat(forward.port, 0, false, 30*time.Second)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(code).To(Equal(http.StatusServiceUnavailable))
+	})
+
+	It("returns 429 with Retry-After when one gateway queue is full", func() {
+		applyManifest("queue.yaml")
+		Eventually(backendReplicas, 2*time.Minute, 2*time.Second).
+			WithArguments("stub-queue").
+			Should(Equal(0))
+		Eventually(func() int {
+			pods, _ := gatewayPodNames("stub-queue")
+			return len(pods)
+		}, 2*time.Minute, time.Second).Should(Equal(2))
+		pods, err := gatewayPodNames("stub-queue")
+		Expect(err).NotTo(HaveOccurred())
+		forward := startGatewayPodPortForward(pods[0])
+
+		first := make(chan chatResult, 1)
+		go func() {
+			code, body, err := requestChat(forward.port, 0, false, 30*time.Second)
+			first <- chatResult{code: code, body: body, err: err}
+		}()
+		Eventually(queueDepth, 10*time.Second, 200*time.Millisecond).
+			WithArguments(forward.port).
+			Should(Equal(int64(1)))
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		request, err := http.NewRequestWithContext(
+			ctx,
+			http.MethodPost,
+			fmt.Sprintf("http://127.0.0.1:%d/v1/chat/completions", forward.port),
+			strings.NewReader(`{"messages":[{"role":"user","content":"overflow"}]}`),
+		)
+		Expect(err).NotTo(HaveOccurred())
+		request.Header.Set("Content-Type", "application/json")
+		response, err := httpClient.Do(request)
+		cancel()
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = response.Body.Close() }()
+		Expect(response.StatusCode).To(Equal(http.StatusTooManyRequests))
+		Expect(response.Header.Get("Retry-After")).To(Equal("5"))
+
+		var completed chatResult
+		Eventually(first, 20*time.Second).Should(Receive(&completed))
+		Expect(completed.err).NotTo(HaveOccurred())
+		Expect(completed.code).To(Equal(http.StatusServiceUnavailable))
+	})
+
+	It("authenticates inference requests and observes Secret rotation in place", func() {
+		const (
+			serviceName = "stub-auth"
+			initialKey  = "initial-client-api-key"
+			rotatedKey  = "rotated-client-api-key"
+		)
+		mustKubectl(
+			"create", "secret", "generic", "stub-auth-client",
+			"-n", namespace,
+			"--from-literal=api-key="+initialKey,
+		)
+		applyManifest("auth.yaml")
+		Eventually(backendReplicas, 2*time.Minute, 2*time.Second).
+			WithArguments(serviceName).
+			Should(Equal(0))
+		forward := startPortForward(serviceName)
+
+		response, err := httpClient.Get(fmt.Sprintf("http://127.0.0.1:%d/healthz", forward.port))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(response.StatusCode).To(Equal(http.StatusOK))
+		_ = response.Body.Close()
+
+		code, _, err := requestChat(forward.port, 0, false, 10*time.Second)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(code).To(Equal(http.StatusUnauthorized))
+		code, _, err = requestChatWithAPIKey(
+			forward.port, 0, false, 10*time.Second, "wrong-key",
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(code).To(Equal(http.StatusUnauthorized))
+
+		code, body, err := requestChatWithAPIKey(
+			forward.port, 0, true, 2*time.Minute, initialKey,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(code).To(Equal(http.StatusOK))
+		Expect(body).To(ContainSubstring("[DONE]"))
+
+		serviceUID := mustKubectl(
+			"get", "llmservice", serviceName, "-n", namespace,
+			"-o", "jsonpath={.metadata.uid}",
+		)
+		gatewayPodsBefore, err := gatewayPodNames(serviceName)
+		Expect(err).NotTo(HaveOccurred())
+		patch := fmt.Sprintf(
+			`{"data":{"api-key":%q}}`,
+			base64.StdEncoding.EncodeToString([]byte(rotatedKey)),
+		)
+		mustKubectl(
+			"patch", "secret", "stub-auth-client", "-n", namespace,
+			"--type=merge", "-p", patch,
+		)
+
+		Eventually(func() bool {
+			oldCode, _, oldErr := requestChatWithAPIKey(
+				forward.port, 0, false, 10*time.Second, initialKey,
+			)
+			newCode, _, newErr := requestChatWithAPIKey(
+				forward.port, 0, false, 30*time.Second, rotatedKey,
+			)
+			return oldErr == nil && newErr == nil &&
+				oldCode == http.StatusUnauthorized && newCode == http.StatusOK
+		}, 2*time.Minute, 3*time.Second).Should(BeTrue())
+
+		Expect(mustKubectl(
+			"get", "llmservice", serviceName, "-n", namespace,
+			"-o", "jsonpath={.metadata.uid}",
+		)).To(Equal(serviceUID))
+		gatewayPodsAfter, err := gatewayPodNames(serviceName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(gatewayPodsAfter).To(Equal(gatewayPodsBefore))
 	})
 
 	It("reports a backend failure and recovers after the runtime is corrected", func() {

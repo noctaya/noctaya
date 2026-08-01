@@ -87,6 +87,26 @@ func mustKubectl(args ...string) string {
 	return output
 }
 
+func evictPod(name string) (string, error) {
+	payload := fmt.Sprintf(
+		`{"apiVersion":"policy/v1","kind":"Eviction","metadata":{"name":%q,"namespace":%q}}`,
+		name,
+		namespace,
+	)
+	cmd := exec.Command(
+		kubectlBin,
+		"create",
+		"--raw",
+		fmt.Sprintf("/api/v1/namespaces/%s/pods/%s/eviction", namespace, name),
+		"-f",
+		"-",
+	)
+	cmd.Dir = repoRoot
+	cmd.Stdin = strings.NewReader(payload)
+	output, err := cmd.CombinedOutput()
+	return string(output), err
+}
+
 func manifestPath(name string) string {
 	return filepath.Join(repoRoot, "test", "e2e", "testdata", name)
 }
@@ -188,6 +208,47 @@ func gatewayPodNames(name string) ([]string, error) {
 	pods := strings.Fields(output)
 	slices.Sort(pods)
 	return pods, nil
+}
+
+func managerPods() ([]corev1.Pod, error) {
+	output, err := kubectl(
+		"get", "pods", "-n", managerNamespace,
+		"-l", "control-plane=controller-manager", "-o", "json",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get manager pods: %w: %s", err, output)
+	}
+	var pods corev1.PodList
+	if err := json.Unmarshal([]byte(output), &pods); err != nil {
+		return nil, fmt.Errorf("decode manager pods: %w", err)
+	}
+	current := make([]corev1.Pod, 0, len(pods.Items))
+	for i := range pods.Items {
+		if pods.Items[i].DeletionTimestamp == nil {
+			current = append(current, pods.Items[i])
+		}
+	}
+	return current, nil
+}
+
+func leaderHolder() (string, error) {
+	output, err := kubectl(
+		"get", "lease", "6d7012cb.noctaya.io", "-n", managerNamespace,
+		"-o", "jsonpath={.spec.holderIdentity}",
+	)
+	if err != nil {
+		return "", fmt.Errorf("get leader lease: %w: %s", err, output)
+	}
+	return strings.TrimSpace(output), nil
+}
+
+func holderPod(holder string, pods []corev1.Pod) string {
+	for i := range pods {
+		if holder == pods[i].Name || strings.HasPrefix(holder, pods[i].Name+"_") {
+			return pods[i].Name
+		}
+	}
+	return ""
 }
 
 var _ = BeforeSuite(func() {

@@ -36,6 +36,7 @@ cluster_created=1
 "${KIND}" create cluster \
   --name "${E2E_KIND_CLUSTER}" \
   --kubeconfig "${E2E_KUBECONFIG}" \
+  --config test/e2e/kind.yaml \
   --wait 120s
 
 context="$(KUBECONFIG="${E2E_KUBECONFIG}" "${KUBECTL}" config current-context)"
