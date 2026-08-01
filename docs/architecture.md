@@ -51,7 +51,9 @@ The API group is `serving.noctaya.io/v1alpha1`.
 | Aggregate scaler (`internal/gateway/scaler`) | Combines demand from multiple gateways and exposes one KEDA ExternalScaler endpoint |
 | KEDA | Reads demand and owns backend replicas; it is required for `LLMService` scaling but installed independently |
 
-Each `LLMService` produces a backend Deployment and Service, a gateway Deployment and public Service, an internal scaler Service, a KEDA `ScaledObject`, and—when requested—cache and prewarm resources. When more than one gateway is configured, it also produces one aggregate-scaler Deployment and an internal authentication Secret. The operator deliberately omits backend `replicas`; KEDA owns that field.
+Each `LLMService` produces a backend Deployment and Service, a gateway Deployment and public Service, an internal scaler Service, a KEDA `ScaledObject`, and—when requested—cache and prewarm resources. Multiple gateways also receive preferred hostname anti-affinity, a `minAvailable: 1` PodDisruptionBudget, one aggregate-scaler Deployment, and an internal authentication Secret. The operator deliberately omits backend `replicas`; KEDA owns that field.
+
+The installation defaults to two leader-elected operator replicas. Preferred hostname anti-affinity spreads them when topology permits, and a `minAvailable: 1` PodDisruptionBudget protects voluntary disruption. Exactly one replica holds the namespaced Lease and reconciles; healthy standbys take over when leadership is released or expires. A deliberate single-replica installation remains supported.
 
 ```mermaid
 flowchart TB
@@ -85,11 +87,12 @@ flowchart TB
 ## Request lifecycle
 
 1. **Idle:** with `spec.scaling.min: 0`, the gateway remains available while KEDA holds the backend at `0`.
-2. **Admit:** a cold request occupies one bounded queue slot. A full queue returns `429`. `keepalive` holds the request with SSE heartbeats; `reject` returns `503` with `Retry-After`.
-3. **Activate:** KEDA observes demand and scales the backend from `0` to `1`. The Pod is not Ready until scheduling, image pull, weight loading, and runtime probes complete.
-4. **Serve:** the gateway forwards the request only after the backend is Ready.
-5. **Scale out:** sustained queue depth can increase replicas up to `spec.scaling.max`.
-6. **Scale down:** after demand and the stabilization window expire, KEDA returns the backend toward `0`; `preStop` drain protects in-flight requests.
+2. **Authenticate:** when configured, the gateway validates the client Bearer token before it consumes queue capacity.
+3. **Admit:** a cold request occupies one bounded queue slot. A full queue returns `429`. `keepalive` holds the request with SSE heartbeats; `reject` returns `503` with `Retry-After`.
+4. **Activate:** KEDA observes demand and scales the backend from `0` to `1`. The Pod is not Ready until scheduling, image pull, weight loading, and runtime probes complete.
+5. **Serve:** the gateway forwards the request only after the backend is Ready.
+6. **Scale out:** sustained queue depth can increase replicas up to `spec.scaling.max`.
+7. **Scale down:** after demand and the stabilization window expire, KEDA returns the backend toward `0`; `preStop` drain protects in-flight requests.
 
 ## Scaling and failure behavior
 
@@ -99,11 +102,15 @@ Noctaya uses KEDA External Push. `StreamIsActive` sends the initial `0→1` acti
 
 With one gateway replica, the ExternalScaler remains co-located in that gateway. With multiple replicas, the operator creates one lightweight aggregate-scaler Deployment and a per-service authentication Secret. Each gateway publishes its complete demand on transitions and every two seconds. Reports carry the Secret token, a process-unique identity, and an increasing sequence number. The scaler bounds report concurrency, member count, and per-member demand before summing the newest report from each member.
 
+`spec.endpoint.maxQueue` bounds admission per gateway and the corresponding per-member demand report. Gateway CPU and memory can be reserved independently from backend accelerator resources through `spec.endpoint.resources`.
+
 A graceful gateway shutdown withdraws its report. A disconnected or replaced member expires after ten seconds, which may briefly overestimate demand but cannot leave a permanent activation lease. Surviving members retain their demand, and replacement gateways register independently. The aggregator is memory-only; after it is replaced, gateway heartbeats rebuild the aggregate.
 
 Cold admission creates an activation lease independent of the client connection. Demand remains active until the backend becomes Ready, followed by a short retry grace, or until `activationTimeout` expires. If a load fails, that lease expires instead of signaling forever; a later cold request may start a new lease.
 
 The controller watches the backend Deployment and Pods. `LLMService` conditions distinguish ordinary startup and scheduling delay from image-pull failures, repeated termination, OOM, crash loops, and a Deployment progress deadline. These observations do not change the gateway contract: the gateway has no Kubernetes credentials, does not replay requests, and returns a bounded `activation_timeout` if readiness does not arrive in time. See [Troubleshoot Noctaya](troubleshooting.md).
+
+Client API-key authentication is optional for backward compatibility. When enabled, the gateway mounts one referenced Secret key and rereads it for every proxied request, so Secret rotation does not require an `LLMService` change or gateway restart. `/healthz`, `/metrics`, and `/noctaya/queue` remain unauthenticated for probes and monitoring and must be protected by cluster networking.
 
 The scaler Service is cluster-internal and is not part of the public gateway Service. KEDA connects to ExternalScaler gRPC on port `9090`; plaintext is the default, and an `LLMService` can reference existing server credentials and a KEDA authentication object to require mutual TLS. Multiple gateways publish authenticated demand to the aggregate scaler over HTTP on port `9091`. Certificate issuance, rotation, and network isolation remain cluster responsibilities; [`examples/security`](https://github.com/noctaya/noctaya/tree/main/examples/security) provides opt-in configuration.
 

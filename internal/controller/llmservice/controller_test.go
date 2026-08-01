@@ -26,14 +26,18 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/events"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -123,6 +127,7 @@ var _ = Describe("LLMService Controller", func() {
 			Expect(k8sClient.DeleteAllOf(ctx, &corev1.Secret{}, deleteOptions...)).To(Succeed())
 			Expect(k8sClient.DeleteAllOf(ctx, &corev1.PersistentVolumeClaim{}, deleteOptions...)).To(Succeed())
 			Expect(k8sClient.DeleteAllOf(ctx, &batchv1.Job{}, deleteOptions...)).To(Succeed())
+			Expect(k8sClient.DeleteAllOf(ctx, &policyv1.PodDisruptionBudget{}, deleteOptions...)).To(Succeed())
 			foreignSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
 				Name: svcName + "-demand-auth", Namespace: namespace,
 			}}
@@ -151,6 +156,8 @@ var _ = Describe("LLMService Controller", func() {
 						g.Expect(items.Items).To(BeEmpty())
 					case *batchv1.JobList:
 						g.Expect(items.Items).To(BeEmpty())
+					case *policyv1.PodDisruptionBudgetList:
+						g.Expect(items.Items).To(BeEmpty())
 					}
 				}
 				assertNoManagedObjects(&appsv1.DeploymentList{})
@@ -159,6 +166,7 @@ var _ = Describe("LLMService Controller", func() {
 				assertNoManagedObjects(&corev1.SecretList{})
 				assertNoManagedObjects(&corev1.PersistentVolumeClaimList{})
 				assertNoManagedObjects(&batchv1.JobList{})
+				assertNoManagedObjects(&policyv1.PodDisruptionBudgetList{})
 				g.Expect(k8sClient.Get(
 					ctx,
 					types.NamespacedName{Name: svcName + "-demand-auth", Namespace: namespace},
@@ -180,6 +188,7 @@ var _ = Describe("LLMService Controller", func() {
 			Expect(stored.Spec.Scaling.DrainTimeout.Duration).To(Equal(2 * time.Minute))
 			Expect(stored.Spec.Cache.Strategy).To(Equal("NodeLocalPVC"))
 			Expect(stored.Spec.Endpoint.OpenAICompatible).To(BeTrue())
+			Expect(stored.Spec.Endpoint.MaxQueue).To(Equal(int32(100)))
 			Expect(stored.Spec.Endpoint.ColdStart.Mode).To(Equal("keepalive"))
 			Expect(stored.Spec.Endpoint.ColdStart.HeartbeatInterval.Duration).To(Equal(10 * time.Second))
 
@@ -227,6 +236,74 @@ var _ = Describe("LLMService Controller", func() {
 			Expect(found).To(BeTrue())
 			Expect(triggers).To(HaveLen(1))
 			Expect(triggers[0]).To(HaveKeyWithValue("type", "external-push"))
+		})
+
+		It("applies per-service gateway admission, compute, and authentication settings", func() {
+			service := &servingv1alpha1.LLMService{}
+			Expect(k8sClient.Get(ctx, key, service)).To(Succeed())
+			requestCPU := resource.MustParse("50m")
+			requestMemory := resource.MustParse("64Mi")
+			limitMemory := resource.MustParse("128Mi")
+			service.Spec.Endpoint.MaxQueue = 3
+			service.Spec.Endpoint.Resources = servingv1alpha1.GatewayResourceSpec{
+				Requests: servingv1alpha1.GatewayComputeSpec{
+					CPU: &requestCPU, Memory: &requestMemory,
+				},
+				Limits: servingv1alpha1.GatewayComputeSpec{Memory: &limitMemory},
+			}
+			service.Spec.Endpoint.Authentication = &servingv1alpha1.EndpointAuthenticationSpec{
+				SecretRef: servingv1alpha1.SecretKeyReference{Name: "client-api-key", Key: "token"},
+			}
+			Expect(k8sClient.Update(ctx, service)).To(Succeed())
+
+			_, err := reconciler().Reconcile(ctx, reconcile.Request{NamespacedName: key})
+			Expect(err).NotTo(HaveOccurred())
+
+			gateway := &appsv1.Deployment{}
+			gatewayKey := types.NamespacedName{Name: svcName + "-gateway", Namespace: namespace}
+			Expect(k8sClient.Get(ctx, gatewayKey, gateway)).To(Succeed())
+			container := gateway.Spec.Template.Spec.Containers[0]
+			Expect(container.Env).To(ContainElements(
+				corev1.EnvVar{Name: "NOCTAYA_MAX_QUEUE", Value: "3"},
+				corev1.EnvVar{
+					Name:  "NOCTAYA_CLIENT_API_KEY_FILE",
+					Value: "/var/run/noctaya/client-auth/api-key",
+				},
+			))
+			Expect(container.Resources.Requests).To(Equal(corev1.ResourceList{
+				corev1.ResourceCPU: requestCPU, corev1.ResourceMemory: requestMemory,
+			}))
+			Expect(container.Resources.Limits).To(Equal(corev1.ResourceList{
+				corev1.ResourceMemory: limitMemory,
+			}))
+			Expect(gateway.Spec.Template.Spec.Volumes).To(ContainElement(And(
+				HaveField("VolumeSource.Secret.SecretName", "client-api-key"),
+				HaveField("VolumeSource.Secret.Items", []corev1.KeyToPath{{
+					Key: "token", Path: "api-key",
+				}}),
+			)))
+		})
+
+		It("rejects invalid gateway resource quantities at the API boundary", func() {
+			invalid := &unstructured.Unstructured{Object: map[string]any{
+				"apiVersion": "serving.noctaya.io/v1alpha1",
+				"kind":       "LLMService",
+				"metadata": map[string]any{
+					"name": "invalid-gateway-resources", "namespace": namespace,
+				},
+				"spec": map[string]any{
+					"model": map[string]any{
+						"source": map[string]any{"uri": "hf://noctaya/stub"},
+					},
+					"runtime": map[string]any{"name": runtimeName},
+					"endpoint": map[string]any{
+						"resources": map[string]any{
+							"requests": map[string]any{"cpu": "not-a-quantity"},
+						},
+					},
+				},
+			}}
+			Expect(k8sClient.Create(ctx, invalid)).NotTo(Succeed())
 		})
 
 		It("resolves the runtime via vendor selector", func() {
@@ -418,6 +495,21 @@ var _ = Describe("LLMService Controller", func() {
 			Expect(k8sClient.Get(ctx, demandSecretKey, demandSecret)).To(Succeed())
 			Expect(demandSecret.Data["token"]).To(HaveLen(43))
 
+			pdb := &policyv1.PodDisruptionBudget{}
+			Expect(k8sClient.Get(ctx, gatewayKey, pdb)).To(Succeed())
+			Expect(pdb.OwnerReferences).NotTo(BeEmpty())
+			Expect(pdb.Spec.MinAvailable.IntVal).To(Equal(int32(1)))
+			Expect(pdb.Spec.Selector.MatchLabels).To(Equal(gatewayDeployment.Spec.Selector.MatchLabels))
+
+			pdb.Spec.MinAvailable = ptr.To(intstr.FromInt(0))
+			pdb.Spec.Selector.MatchLabels = map[string]string{"drifted": "true"}
+			Expect(k8sClient.Update(ctx, pdb)).To(Succeed())
+			_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Get(ctx, gatewayKey, pdb)).To(Succeed())
+			Expect(pdb.Spec.MinAvailable.IntVal).To(Equal(int32(1)))
+			Expect(pdb.Spec.Selector.MatchLabels).To(Equal(gatewayDeployment.Spec.Selector.MatchLabels))
+
 			r.GatewayReplicas = 1
 			_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
 			Expect(err).NotTo(HaveOccurred())
@@ -425,6 +517,8 @@ var _ = Describe("LLMService Controller", func() {
 			Expect(k8sClient.Get(ctx, scalerKey, scalerService)).To(Succeed())
 			Expect(scalerService.Spec.Selector).To(HaveKeyWithValue("serving.noctaya.io/gateway", svcName))
 			Expect(k8sClient.Get(ctx, demandSecretKey, &corev1.Secret{})).To(Satisfy(apierrors.IsNotFound))
+			Expect(k8sClient.Get(ctx, gatewayKey, &policyv1.PodDisruptionBudget{})).
+				To(Satisfy(apierrors.IsNotFound))
 		})
 
 		It("reports missing KEDA without creating a model backend", func() {

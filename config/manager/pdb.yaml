@@ -1,0 +1,15 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  labels:
+    control-plane: controller-manager
+    app.kubernetes.io/name: noctaya
+    app.kubernetes.io/managed-by: kustomize
+  name: controller-manager
+  namespace: system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+      app.kubernetes.io/name: noctaya

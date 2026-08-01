@@ -1,0 +1,13 @@
+{{- $operatorReplicas := int .Values.operator.replicas -}}
+{{- if gt $operatorReplicas 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "noctaya.fullname" . }}-controller-manager
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "noctaya.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {{- include "noctaya.selectorLabels" . | nindent 6 }}
+{{- end }}

@@ -43,6 +43,8 @@ kubectl rollout status deployment/noctaya-controller-manager -n noctaya-system
 kubectl get crd inferenceruntimes.serving.noctaya.io llmservices.serving.noctaya.io
 ```
 
+The chart runs two leader-elected operator replicas by default, spreads them across nodes when possible, and creates a `minAvailable: 1` PodDisruptionBudget. Use `--set operator.replicas=1` only when operator high availability is unnecessary.
+
 ## 3. Install KEDA independently
 
 Install KEDA using its official
@@ -54,7 +56,7 @@ KEDA must expose its API before you create an `LLMService`:
 kubectl get crd scaledobjects.keda.sh
 ```
 
-Noctaya uses KEDA External Push for immediate cold activation. The chart defaults to one gateway; set `gateway.replicas` above one when gateway availability is required. Noctaya then creates a per-service demand aggregator so KEDA receives the complete signal. See [Scaling and failure behavior](architecture.md#scaling-and-failure-behavior).
+Noctaya uses KEDA External Push for immediate cold activation. The chart defaults to one gateway; set `gateway.replicas` above one when gateway availability is required. Noctaya then creates a per-service demand aggregator, preferred hostname anti-affinity, and a `minAvailable: 1` PodDisruptionBudget. See [Scaling and failure behavior](architecture.md#scaling-and-failure-behavior).
 
 For example, add `--set gateway.replicas=2` to the Noctaya Helm installation command to run two gateways per `LLMService`.
 

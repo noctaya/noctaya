@@ -25,10 +25,14 @@ import (
 	// Register Kubernetes client authentication plugins.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	corev1 "k8s.io/api/core/v1"
+	k8slabels "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -134,10 +138,14 @@ func main() {
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
+		Cache:                  managerCacheOptions(),
 		Metrics:                metricsServerOptions,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "6d7012cb.noctaya.io",
+		// The process exits as soon as manager shutdown completes, so releasing
+		// the lease on cancellation safely shortens planned failover.
+		LeaderElectionReleaseOnCancel: true,
 	})
 	if err != nil {
 		setupLog.Error(err, "Failed to start manager")
@@ -175,4 +183,15 @@ func main() {
 		setupLog.Error(err, "Failed to run manager")
 		os.Exit(1)
 	}
+}
+
+func managerCacheOptions() cache.Options {
+	return cache.Options{ByObject: map[client.Object]cache.ByObject{
+		// Client API keys are mounted by kubelet and must not enter the controller cache.
+		&corev1.Secret{}: {
+			Label: k8slabels.SelectorFromSet(k8slabels.Set{
+				"app.kubernetes.io/managed-by": "noctaya",
+			}),
+		},
+	}}
 }

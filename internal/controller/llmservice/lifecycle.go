@@ -23,6 +23,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -38,6 +39,7 @@ type desiredResources struct {
 	backendService    *corev1.Service
 	gatewayDeployment *appsv1.Deployment
 	gatewayService    *corev1.Service
+	gatewayPDB        *policyv1.PodDisruptionBudget
 	scalerDeployment  *appsv1.Deployment
 	scalerService     *corev1.Service
 	cachePVC          *corev1.PersistentVolumeClaim
@@ -68,6 +70,7 @@ func (r *LLMServiceReconciler) renderDesired(
 		return nil, "GatewayConfig", err
 	}
 	desired.gatewayService = backendresources.BuildGatewayService(svc)
+	desired.gatewayPDB = backendresources.BuildGatewayPodDisruptionBudget(svc, r.GatewayReplicas)
 	desired.scalerDeployment = backendresources.BuildGatewayScalerDeployment(svc, r.GatewayImage, r.GatewayReplicas)
 	desired.scalerService = backendresources.BuildGatewayScalerService(svc, r.GatewayReplicas)
 	desired.cachePVC, err = backendresources.BuildCachePVC(svc)
@@ -127,6 +130,15 @@ func (r *LLMServiceReconciler) applyDesired(
 	}
 	if err := r.apply(ctx, svc, desired.gatewayService); err != nil {
 		return "ApplyGatewayService", true, err
+	}
+	if desired.gatewayPDB != nil {
+		if err := r.apply(ctx, svc, desired.gatewayPDB); err != nil {
+			return "ApplyGatewayPodDisruptionBudget", true, err
+		}
+	} else if err := r.deleteOwned(ctx, svc, &policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{Name: svc.Name + "-gateway", Namespace: svc.Namespace},
+	}); err != nil {
+		return "DeleteGatewayPodDisruptionBudget", true, err
 	}
 	if desired.scalerDeployment != nil {
 		if err := r.apply(ctx, svc, desired.scalerDeployment); err != nil {

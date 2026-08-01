@@ -27,6 +27,16 @@ spec:
       labels: {{- include "noctaya.selectorLabels" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "noctaya.serviceAccountName" . }}
+{{- if gt $operatorReplicas 1 }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels: {{- include "noctaya.selectorLabels" . | nindent 20 }}
+                topologyKey: kubernetes.io/hostname
+{{- end }}
       securityContext:
         runAsNonRoot: true
         seccompProfile:

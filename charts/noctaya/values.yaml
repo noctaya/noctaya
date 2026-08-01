@@ -6,7 +6,7 @@ image:
   pullPolicy: IfNotPresent
 
 operator:
-  replicas: 1
+  replicas: 2
   leaderElect: true
   resources:
     limits:

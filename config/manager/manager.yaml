@@ -21,7 +21,7 @@ spec:
     matchLabels:
       control-plane: controller-manager
       app.kubernetes.io/name: noctaya
-  replicas: 1
+  replicas: 2
   template:
     metadata:
       annotations:
@@ -30,6 +30,16 @@ spec:
         control-plane: controller-manager
         app.kubernetes.io/name: noctaya
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  control-plane: controller-manager
+                  app.kubernetes.io/name: noctaya
+              topologyKey: kubernetes.io/hostname
       securityContext:
         runAsNonRoot: true
         seccompProfile:
