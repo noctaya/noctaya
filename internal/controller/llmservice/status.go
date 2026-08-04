@@ -25,6 +25,8 @@ import (
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -44,8 +46,6 @@ func (r *LLMServiceReconciler) updateStatus(
 	deployment *appsv1.Deployment,
 	pods []corev1.Pod,
 ) (ctrl.Result, error) {
-	oldStatus := svc.Status.DeepCopy()
-	previousDegraded := meta.FindStatusCondition(oldStatus.Conditions, conditionDegraded)
 	observation := observeBackend(deployment, pods)
 
 	phase := servingv1alpha1.PhasePending
@@ -106,14 +106,46 @@ func (r *LLMServiceReconciler) updateStatus(
 	}
 	meta.SetStatusCondition(&svc.Status.Conditions, degraded)
 
-	if apiequality.Semantic.DeepEqual(oldStatus, &svc.Status) {
-		return ctrl.Result{}, nil
-	}
-	if err := r.Status().Update(ctx, svc); err != nil {
+	previousStatus, changed, err := r.updateStatusWithRetry(ctx, svc, svc.Status)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
-	r.reportBackendTransition(ctx, svc, previousDegraded, &degraded)
+	if changed {
+		previousDegraded := meta.FindStatusCondition(previousStatus.Conditions, conditionDegraded)
+		r.reportBackendTransition(ctx, svc, previousDegraded, &degraded)
+	}
 	return ctrl.Result{}, nil
+}
+
+func (r *LLMServiceReconciler) updateStatusWithRetry(
+	ctx context.Context,
+	svc *servingv1alpha1.LLMService,
+	desired servingv1alpha1.LLMServiceStatus,
+) (*servingv1alpha1.LLMServiceStatus, bool, error) {
+	key := types.NamespacedName{Name: svc.Name, Namespace: svc.Namespace}
+	var previous *servingv1alpha1.LLMServiceStatus
+	changed := false
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest := &servingv1alpha1.LLMService{}
+		if err := r.Get(ctx, key, latest); err != nil {
+			return err
+		}
+		previous = latest.Status.DeepCopy()
+		if apiequality.Semantic.DeepEqual(previous, &desired) {
+			svc.Status = *desired.DeepCopy()
+			svc.ResourceVersion = latest.ResourceVersion
+			return nil
+		}
+		latest.Status = *desired.DeepCopy()
+		if err := r.Status().Update(ctx, latest); err != nil {
+			return err
+		}
+		changed = true
+		svc.Status = *latest.Status.DeepCopy()
+		svc.ResourceVersion = latest.ResourceVersion
+		return nil
+	})
+	return previous, changed, err
 }
 
 func (r *LLMServiceReconciler) reportBackendTransition(
@@ -191,7 +223,6 @@ func (r *LLMServiceReconciler) failWithAutoscaling(
 	autoscalingApplied bool,
 ) (ctrl.Result, error) {
 	logf.FromContext(ctx).Error(err, "Failed to reconcile LLMService", "reason", reason)
-	oldStatus := svc.Status.DeepCopy()
 	svc.Status.Phase = servingv1alpha1.PhaseDegraded
 	autoscaling := metav1.Condition{
 		Type:               conditionAutoscalingReady,
@@ -220,10 +251,7 @@ func (r *LLMServiceReconciler) failWithAutoscaling(
 		Message:            err.Error(),
 		ObservedGeneration: svc.Generation,
 	})
-	if apiequality.Semantic.DeepEqual(oldStatus, &svc.Status) {
-		return ctrl.Result{}, err
-	}
-	if updateErr := r.Status().Update(ctx, svc); updateErr != nil {
+	if _, _, updateErr := r.updateStatusWithRetry(ctx, svc, svc.Status); updateErr != nil {
 		return ctrl.Result{}, updateErr
 	}
 	return ctrl.Result{}, err
