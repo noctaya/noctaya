@@ -106,6 +106,23 @@ func (r *LLMServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 		return r.fail(ctx, &svc, reason, err)
 	}
+	if desired.prewarmJob != nil {
+		var prewarm batchv1.Job
+		if err := r.Get(ctx, client.ObjectKeyFromObject(desired.prewarmJob), &prewarm); err != nil {
+			return r.failAfterAutoscaling(ctx, &svc, "ObservePrewarmJob", err)
+		}
+		for i := range prewarm.Status.Conditions {
+			condition := prewarm.Status.Conditions[i]
+			if condition.Type == batchv1.JobFailed && condition.Status == corev1.ConditionTrue {
+				return r.failAfterAutoscaling(
+					ctx,
+					&svc,
+					"PrewarmFailed",
+					fmt.Errorf("prewarm Job %s failed: %s", prewarm.Name, condition.Message),
+				)
+			}
+		}
+	}
 
 	var live appsv1.Deployment
 	if err := r.Get(ctx, client.ObjectKeyFromObject(desired.backendDeployment), &live); err != nil {

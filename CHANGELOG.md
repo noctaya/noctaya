@@ -17,7 +17,9 @@ All notable changes to this project are documented here. The format is based on
 - Added optional Secret-backed Bearer authentication with in-place key rotation for client inference requests.
 - Added preferred hostname anti-affinity and an owned `minAvailable: 1` PodDisruptionBudget for multi-replica gateways.
 - Added a two-replica leader-elected operator topology with preferred cross-node placement and disruption protection.
-- Added an isolated release gate for CRD/chart upgrade, rollback compatibility, component replacement, node restart, and retained evidence.
+- Added `SharedPVC` RWX caches with single-writer prewarming, read-only serving mounts, immutable-spec detection, and explicit prewarm failure reporting.
+- Added digest-pinned OCI model artifacts with projected private-registry credentials and cancellation-safe atomic staging.
+- Added Helm values schema validation, pinned vulnerability and workflow checks, keyless image/chart signing, release verification guidance, and a production recovery runbook.
 
 ### Changed
 - Made KEDA External Push the sole scaler transport. Cold `0→1` activation is streamed immediately, while periodic metric reads remain responsible for recovery and `1→N` scale-out.
@@ -35,6 +37,7 @@ All notable changes to this project are documented here. The format is based on
 - Collapsed concurrent backend readiness probes and recorded activation latency only for requests that actually waited.
 - Bounded aggregate demand-report size, read time, concurrency, membership, and per-gateway demand.
 - Kept gateway admission capacity and aggregate per-member demand bounds synchronized.
+- Retried conflicting `LLMService` status writes without overwriting concurrent specification or metadata changes.
 
 ### Tests
 - Changed the Kind lifecycle to prove activation occurs before a deliberately extended fallback polling interval.

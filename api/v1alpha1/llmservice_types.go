@@ -72,15 +72,18 @@ type ModelSpec struct {
 }
 
 // ModelSource describes an inline model location and optional credentials.
+// +kubebuilder:validation:XValidation:rule="!has(self.secretRef) || self.uri.startsWith('oci://')",message="secretRef is supported only for oci:// sources"
+// +kubebuilder:validation:XValidation:rule="!has(self.secretRef) || size(self.secretRef.name) > 0",message="secretRef.name is required"
 type ModelSource struct {
-	// uri is the model location. Supported in v0: hf://, modelscope://, and
+	// uri is the model location. Supported in v0: hf://, modelscope://,
+	// digest-pinned oci://registry/repository@sha256:<digest>, and
 	// pvc://<claim>[/<subpath>] (pre-staged weights on an existing PVC, mounted
-	// read-only). oci:// and s3:// are not yet implemented.
+	// read-only). s3:// is not implemented.
 	// +kubebuilder:validation:MinLength=1
 	URI string `json:"uri"`
 
-	// secretRef holds credentials for private sources (e.g. a ModelScope token).
-	// Not supported in v0: setting it fails reconcile until private sources land.
+	// secretRef identifies a kubernetes.io/dockerconfigjson Secret used only for a
+	// private OCI registry. The Secret is projected directly into the pull Job.
 	// +optional
 	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
 }
@@ -239,11 +242,12 @@ type CacheSpec struct {
 	// +optional
 	Strategy string `json:"strategy,omitempty"`
 
-	// size is the requested NodeLocalPVC capacity.
+	// size is the requested NodeLocalPVC or SharedPVC capacity.
 	// +optional
 	Size *resource.Quantity `json:"size,omitempty"`
 
-	// storageClassName pins the cache PVC to a StorageClass; empty uses the cluster
+	// storageClassName pins the cache PVC to a StorageClass; SharedPVC requires a
+	// ReadWriteMany-capable class. Empty uses the cluster
 	// default. Set this on clusters without a default StorageClass (common on managed
 	// or domestic clusters) or to target a specific disk type.
 	// +optional

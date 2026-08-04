@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
+	backendresources "github.com/noctaya/noctaya/internal/backend/resources"
 )
 
 const fieldOwner = client.FieldOwner("noctaya-operator")
@@ -55,6 +56,7 @@ func (r *LLMServiceReconciler) ensureCreated(
 	owner *servingv1alpha1.LLMService,
 	obj client.Object,
 ) error {
+	desiredHash := obj.GetAnnotations()[backendresources.CreateOnceHashAnnotation]
 	if err := controllerutil.SetControllerReference(owner, obj, r.Scheme); err != nil {
 		return err
 	}
@@ -67,6 +69,12 @@ func (r *LLMServiceReconciler) ensureCreated(
 		if !metav1.IsControlledBy(obj, owner) {
 			return fmt.Errorf("resource %s/%s already exists and is not controlled by LLMService %s",
 				obj.GetNamespace(), obj.GetName(), owner.Name)
+		}
+		if desiredHash != "" && obj.GetAnnotations()[backendresources.CreateOnceHashAnnotation] != desiredHash {
+			return fmt.Errorf(
+				"immutable resource %s/%s differs from the requested cache configuration; delete it explicitly before reconciling the change",
+				obj.GetNamespace(), obj.GetName(),
+			)
 		}
 	}
 	return nil

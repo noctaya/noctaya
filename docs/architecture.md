@@ -114,12 +114,15 @@ Client API-key authentication is optional for backward compatibility. When enabl
 
 The scaler Service is cluster-internal and is not part of the public gateway Service. KEDA connects to ExternalScaler gRPC on port `9090`; plaintext is the default, and an `LLMService` can reference existing server credentials and a KEDA authentication object to require mutual TLS. Multiple gateways publish authenticated demand to the aggregate scaler over HTTP on port `9091`. Certificate issuance, rotation, and network isolation remain cluster responsibilities; [`examples/security`](https://github.com/noctaya/noctaya/tree/main/examples/security) provides opt-in configuration.
 
-## Caching
+## Model delivery and caching
 
-Caching reduces repeated download time; runtime loading time remains. Implemented strategies are `NodeLocalPVC` (default), `HostPath`, and `None`. The API reserves `SharedPVC` and `BakedImage`, but they are not implemented.
+Caching reduces repeated download time; runtime loading time remains. Implemented strategies are `NodeLocalPVC` (default), `SharedPVC`, `HostPath`, and `None`. `SharedPVC` creates one `ReadWriteMany` claim for reuse by replicas on different nodes; the selected StorageClass must actually provide RWX semantics. `BakedImage` remains reserved.
 
-An optional prewarm Job downloads Hugging Face or ModelScope weights without requesting an accelerator. A `pvc://` model source mounts pre-staged weights read-only and skips prewarming.
-Cache PVCs and prewarm Jobs are create-once because their workload fields are immutable; replace them explicitly after changing model or cache configuration.
+An optional prewarm Job downloads Hugging Face or ModelScope weights without requesting an accelerator. With a prewarmed `SharedPVC`, the Job is the only writer and serving containers mount the completed cache read-only. A readiness marker prevents backends from consuming partial output. Without prewarm, serving containers retain the write access required by hub clients. A `pvc://` source mounts pre-staged weights read-only and skips prewarming.
+
+Digest-pinned `oci://` sources always stage through a one-time Job. A pinned ORAS container pulls artifact files into an isolated `emptyDir`; a second container rejects symbolic links, copies to a partial directory on the cache filesystem, atomically promotes the directory, and writes the readiness marker. Registry credentials are projected from a `kubernetes.io/dockerconfigjson` Secret and never enter status, logs, or arguments. Cancellation and retry can leave only an untrusted `.partial` directory, which the next attempt removes.
+
+Cache PVCs and prewarm Jobs are create-once because their workload fields are immutable. Their desired specifications are hashed; changing model or cache configuration reports an explicit error until the old resource is deliberately replaced. Terminal Job failure is reported as `PrewarmFailed`.
 
 ## Observability
 

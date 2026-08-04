@@ -17,6 +17,7 @@ limitations under the License.
 package model_test
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -64,6 +65,33 @@ func TestResolvePVCWholeVolume(t *testing.T) {
 	g.Expect(got.Path).To(Equal(""))
 }
 
+func TestResolveDigestPinnedOCI(t *testing.T) {
+	g := NewWithT(t)
+	digest := strings.Repeat("a", 64)
+	spec := src("oci://registry.example.com/models/qwen@sha256:" + digest)
+	spec.Source.SecretRef = &corev1.LocalObjectReference{Name: "registry-auth"}
+	got, err := model.Resolve(spec)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(got.Source).To(Equal("oci"))
+	g.Expect(got.OCIReference).To(Equal("registry.example.com/models/qwen@sha256:" + digest))
+	g.Expect(got.Path).To(Equal("/cache/oci/sha256-" + digest))
+	g.Expect(got.ReadyPath).To(Equal(got.Path + "/.noctaya-ready"))
+	g.Expect(got.OCISecretName).To(Equal("registry-auth"))
+}
+
+func TestResolveRejectsMutableOrMalformedOCI(t *testing.T) {
+	g := NewWithT(t)
+	for _, uri := range []string{
+		"oci://registry.example.com/models/qwen:latest",
+		"oci://registry.example.com/models/qwen@sha256:abc",
+		"oci://registry.example.com/Models/qwen@sha256:" + strings.Repeat("a", 64),
+		"oci://registry.example.com/models/../qwen@sha256:" + strings.Repeat("a", 64),
+	} {
+		_, err := model.Resolve(src(uri))
+		g.Expect(err).To(HaveOccurred(), uri)
+	}
+}
+
 func TestResolveErrors(t *testing.T) {
 	g := NewWithT(t)
 
@@ -89,7 +117,7 @@ func TestResolveErrors(t *testing.T) {
 	g.Expect(err).To(HaveOccurred())
 }
 
-func TestResolveRejectsSecretRef(t *testing.T) {
+func TestResolveRejectsSecretRefForHubSource(t *testing.T) {
 	g := NewWithT(t)
 	spec := src("modelscope://Qwen/Qwen3-8B-Instruct")
 	spec.Source.SecretRef = &corev1.LocalObjectReference{Name: "modelscope-token"}

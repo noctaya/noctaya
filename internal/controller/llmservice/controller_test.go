@@ -552,20 +552,61 @@ var _ = Describe("LLMService Controller", func() {
 			)).To(Satisfy(apierrors.IsNotFound))
 		})
 
-		It("does not apply resources when desired-state rendering fails", func() {
+		It("reconciles a shared cache and rejects immutable changes", func() {
 			service := &servingv1alpha1.LLMService{}
 			Expect(k8sClient.Get(ctx, key, service)).To(Succeed())
 			service.Spec.Cache.Strategy = "SharedPVC"
+			service.Spec.Cache.Prewarm = true
 			Expect(k8sClient.Update(ctx, service)).To(Succeed())
 
 			_, err := reconciler().Reconcile(ctx, reconcile.Request{NamespacedName: key})
-			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
-			scaledObject := &unstructured.Unstructured{}
-			scaledObject.SetAPIVersion("keda.sh/v1alpha1")
-			scaledObject.SetKind("ScaledObject")
-			Expect(k8sClient.Get(ctx, key, scaledObject)).To(Satisfy(apierrors.IsNotFound))
-			Expect(k8sClient.Get(ctx, key, &appsv1.Deployment{})).To(Satisfy(apierrors.IsNotFound))
+			pvcKey := types.NamespacedName{Name: svcName + "-cache", Namespace: namespace}
+			pvc := &corev1.PersistentVolumeClaim{}
+			Expect(k8sClient.Get(ctx, pvcKey, pvc)).To(Succeed())
+			Expect(pvc.Spec.AccessModes).To(Equal([]corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany}))
+			Expect(pvc.OwnerReferences).NotTo(BeEmpty())
+
+			Expect(k8sClient.Get(ctx, key, service)).To(Succeed())
+			changedSize := resource.MustParse("60Gi")
+			service.Spec.Cache.Size = &changedSize
+			Expect(k8sClient.Update(ctx, service)).To(Succeed())
+			_, err = reconciler().Reconcile(ctx, reconcile.Request{NamespacedName: key})
+			Expect(err).To(MatchError(ContainSubstring("immutable resource")))
+		})
+
+		It("reports a terminal prewarm failure without accepting partial cache output", func() {
+			service := &servingv1alpha1.LLMService{}
+			Expect(k8sClient.Get(ctx, key, service)).To(Succeed())
+			service.Spec.Cache.Strategy = "SharedPVC"
+			service.Spec.Cache.Prewarm = true
+			Expect(k8sClient.Update(ctx, service)).To(Succeed())
+
+			_, err := reconciler().Reconcile(ctx, reconcile.Request{NamespacedName: key})
+			Expect(err).NotTo(HaveOccurred())
+
+			jobKey := types.NamespacedName{Name: svcName + "-prewarm", Namespace: namespace}
+			job := &batchv1.Job{}
+			Expect(k8sClient.Get(ctx, jobKey, job)).To(Succeed())
+			now := metav1.Now()
+			job.Status.StartTime = &now
+			job.Status.Failed = 1
+			job.Status.Conditions = []batchv1.JobCondition{{
+				Type: batchv1.JobFailureTarget, Status: corev1.ConditionTrue, Reason: "BackoffLimitExceeded",
+				Message: "download stopped before the cache readiness marker was written",
+			}, {
+				Type: batchv1.JobFailed, Status: corev1.ConditionTrue, Reason: "BackoffLimitExceeded",
+				Message: "download stopped before the cache readiness marker was written",
+			}}
+			Expect(k8sClient.Status().Update(ctx, job)).To(Succeed())
+
+			_, err = reconciler().Reconcile(ctx, reconcile.Request{NamespacedName: key})
+			Expect(err).To(MatchError(ContainSubstring("prewarm Job")))
+			Expect(k8sClient.Get(ctx, key, service)).To(Succeed())
+			degraded := meta.FindStatusCondition(service.Status.Conditions, "Degraded")
+			Expect(degraded).NotTo(BeNil())
+			Expect(degraded.Reason).To(Equal("PrewarmFailed"))
 		})
 
 		It("marks autoscaling unavailable for generic ScaledObject apply failures", func() {

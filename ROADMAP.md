@@ -9,7 +9,7 @@ Noctaya is an alpha Kubernetes control plane for internal, development, and stag
 - Cold starts can take seconds to minutes; latency-sensitive models should use `scaling.min: 1`.
 - Gateway API-key authentication is optional; unauthenticated endpoints must remain behind a trusted boundary.
 - Multiple gateways use one replaceable per-model demand aggregator; broader failure-injection coverage is still in progress.
-- Node-local caches are per node; shared and immutable model distribution is not yet available.
+- Shared RWX caches and digest-pinned OCI model artifacts are available, but portability remains specific to the validated StorageClass and registry/runtime combination.
 - Hardware support claims remain specific to the validated device, topology, driver, runtime, and image stack.
 
 ---
@@ -24,7 +24,7 @@ Noctaya addresses these problems with a small Kubernetes-native lifecycle layer:
 - **Scale-to-zero lifecycle** — an always-on gateway exposes an OpenAI-compatible endpoint while independently installed KEDA scales the model backend through `0→1→N→0`.
 - **Cold-start safety** — configurable bounded admission, activation leases, SSE heartbeats, model-aware readiness, and graceful drain protect requests and the gateway throughout activation and scale-down.
 - **Gateway availability and access** — optional Secret-backed API-key authentication, preferred cross-node placement, and disruption budgets protect public gateway replicas without coupling Noctaya to an ingress implementation.
-- **Model delivery and caching** — Hugging Face, ModelScope, and pre-staged `pvc://` sources work with `HostPath` or `NodeLocalPVC` caches and optional prewarming.
+- **Model delivery and caching** — Hugging Face, ModelScope, digest-pinned OCI artifacts, and pre-staged `pvc://` sources work with node-local or shared persistent caches and controlled prewarming.
 - **Thin accelerator adaptation** — NVIDIA and Ascend adapters translate the same API into device-specific Kubernetes resources without implementing kernels, runtimes, or device plugins.
 - **Composable operations** — device plugins, KEDA, schedulers such as Volcano, and optional Prometheus and Grafana resources remain independently installed and managed.
 
@@ -47,8 +47,6 @@ The v0.4.0 goal is to make Noctaya safer and more predictable for controlled, si
 
 ### Predictable model delivery
 
-- Add `SharedPVC` support for pre-populated RWX model caches across nodes.
-- Add `oci://` model delivery for immutable and offline-friendly packaging.
 - Document and validate runtime-image pre-distribution and scale-down stabilization for fresh-node activation.
 
 ### Production operations

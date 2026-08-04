@@ -20,6 +20,7 @@ package model
 import (
 	"fmt"
 	"path"
+	"regexp"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -28,6 +29,10 @@ import (
 	servingv1alpha1 "github.com/noctaya/noctaya/api/v1alpha1"
 	backendruntime "github.com/noctaya/noctaya/internal/backend/runtime"
 )
+
+var ociReference = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?::[0-9]+)?/[a-z0-9]+(?:[._/-][a-z0-9]+)*@sha256:[a-f0-9]{64}$`)
+
+const ociScheme = "oci"
 
 // Resolve maps a model source to the path and environment consumed by the runtime.
 func Resolve(model servingv1alpha1.ModelSpec) (backendruntime.ResolvedModel, error) {
@@ -38,15 +43,15 @@ func Resolve(model servingv1alpha1.ModelSpec) (backendruntime.ResolvedModel, err
 		return backendruntime.ResolvedModel{}, fmt.Errorf("model.source.uri is required")
 	}
 
-	if model.Source.SecretRef != nil {
-		return backendruntime.ResolvedModel{}, fmt.Errorf("model.source.secretRef is not supported yet; use a public model source or remove it")
-	}
-
 	scheme, ref, ok := strings.Cut(model.Source.URI, "://")
 	if !ok || ref == "" {
 		return backendruntime.ResolvedModel{}, fmt.Errorf("invalid model uri %q: expected scheme://reference", model.Source.URI)
 	}
 
+	scheme = strings.ToLower(scheme)
+	if model.Source.SecretRef != nil && scheme != ociScheme {
+		return backendruntime.ResolvedModel{}, fmt.Errorf("model.source.secretRef is supported only for oci:// sources")
+	}
 	switch scheme {
 	case "hf", "huggingface":
 		return backendruntime.ResolvedModel{Path: ref, Source: "hf"}, nil
@@ -65,7 +70,29 @@ func Resolve(model servingv1alpha1.ModelSpec) (backendruntime.ResolvedModel, err
 			return backendruntime.ResolvedModel{}, fmt.Errorf("invalid pvc uri %q: subpath must stay within the model volume", model.Source.URI)
 		}
 		return backendruntime.ResolvedModel{Path: subpath, Source: "pvc", PVC: pvcName}, nil
+	case ociScheme:
+		if !ociReference.MatchString(ref) {
+			return backendruntime.ResolvedModel{}, fmt.Errorf(
+				"invalid oci uri %q: expected oci://<registry>/<repository>@sha256:<64 lowercase hex characters>",
+				model.Source.URI,
+			)
+		}
+		digest := strings.TrimPrefix(ref[strings.LastIndexByte(ref, '@')+1:], "sha256:")
+		cachePath := "/cache/oci/sha256-" + digest
+		resolved := backendruntime.ResolvedModel{
+			Path:         cachePath,
+			Source:       ociScheme,
+			OCIReference: ref,
+			ReadyPath:    cachePath + "/.noctaya-ready",
+		}
+		if model.Source.SecretRef != nil {
+			if model.Source.SecretRef.Name == "" {
+				return backendruntime.ResolvedModel{}, fmt.Errorf("model.source.secretRef.name is required")
+			}
+			resolved.OCISecretName = model.Source.SecretRef.Name
+		}
+		return resolved, nil
 	default:
-		return backendruntime.ResolvedModel{}, fmt.Errorf("model uri scheme %q is not supported yet (use hf://, modelscope://, or pvc://)", scheme)
+		return backendruntime.ResolvedModel{}, fmt.Errorf("model uri scheme %q is not supported yet (use hf://, modelscope://, oci://, or pvc://)", scheme)
 	}
 }

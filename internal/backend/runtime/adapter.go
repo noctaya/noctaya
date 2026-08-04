@@ -25,13 +25,20 @@ import (
 
 type ResolvedModel struct {
 	Path string
-	// Source ("hf" | "modelscope" | "pvc") selects the prewarm download command, or
+	// Source ("hf" | "modelscope" | "pvc" | "oci") selects model delivery, or
 	// "pvc" for weights pre-staged on a PersistentVolumeClaim (no download).
 	Source string
 	Env    []corev1.EnvVar
 	// PVC, when set (pvc:// source), is an existing claim mounted read-only at the model
 	// mount path; Path is then the model's subpath within that PVC. No prewarm is run.
 	PVC string
+	// OCIReference is a registry/repository@sha256:digest reference without credentials.
+	OCIReference string
+	// OCISecretName is an optional kubernetes.io/dockerconfigjson Secret projected
+	// directly into the OCI puller without passing credential values as arguments.
+	OCISecretName string
+	// ReadyPath is created only after an artifact is completely staged into Path.
+	ReadyPath string
 }
 
 type AcceleratorRequest struct {

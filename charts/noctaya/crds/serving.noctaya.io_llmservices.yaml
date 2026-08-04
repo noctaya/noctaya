@@ -66,12 +66,13 @@ spec:
                     anyOf:
                     - type: integer
                     - type: string
-                    description: size is the requested NodeLocalPVC capacity.
+                    description: size is the requested NodeLocalPVC or SharedPVC capacity.
                     pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                     x-kubernetes-int-or-string: true
                   storageClassName:
                     description: |-
-                      storageClassName pins the cache PVC to a StorageClass; empty uses the cluster
+                      storageClassName pins the cache PVC to a StorageClass; SharedPVC requires a
+                      ReadWriteMany-capable class. Empty uses the cluster
                       default. Set this on clusters without a default StorageClass (common on managed
                       or domestic clusters) or to target a specific disk type.
                     type: string
@@ -227,8 +228,8 @@ spec:
                     properties:
                       secretRef:
                         description: |-
-                          secretRef holds credentials for private sources (e.g. a ModelScope token).
-                          Not supported in v0: setting it fails reconcile until private sources land.
+                          secretRef identifies a kubernetes.io/dockerconfigjson Secret used only for a
+                          private OCI registry. The Secret is projected directly into the pull Job.
                         properties:
                           name:
                             default: ""
@@ -243,14 +244,20 @@ spec:
                         x-kubernetes-map-type: atomic
                       uri:
                         description: |-
-                          uri is the model location. Supported in v0: hf://, modelscope://, and
+                          uri is the model location. Supported in v0: hf://, modelscope://,
+                          digest-pinned oci://registry/repository@sha256:<digest>, and
                           pvc://<claim>[/<subpath>] (pre-staged weights on an existing PVC, mounted
-                          read-only). oci:// and s3:// are not yet implemented.
+                          read-only). s3:// is not implemented.
                         minLength: 1
                         type: string
                     required:
                     - uri
                     type: object
+                    x-kubernetes-validations:
+                    - message: secretRef is supported only for oci:// sources
+                      rule: '!has(self.secretRef) || self.uri.startsWith(''oci://'')'
+                    - message: secretRef.name is required
+                      rule: '!has(self.secretRef) || size(self.secretRef.name) > 0'
                 type: object
                 x-kubernetes-validations:
                 - message: set exactly one of source or catalogRef

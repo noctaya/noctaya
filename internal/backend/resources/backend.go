@@ -83,7 +83,7 @@ func BuildBackendDeployment(
 	if err != nil {
 		return nil, err
 	}
-	applyCache(&pod, artifacts)
+	applyCache(&pod, artifacts, svc, model)
 
 	// The operator intentionally does NOT set .spec.replicas: KEDA's HPA owns the
 	// backend replica count (0..N, including scale-to-zero). On first create the API

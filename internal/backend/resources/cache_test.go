@@ -17,6 +17,7 @@ limitations under the License.
 package resources_test
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -145,8 +146,85 @@ func TestNoneCacheMountsNothing(t *testing.T) {
 
 func TestSharedPVCNotSupportedYet(t *testing.T) {
 	g := NewWithT(t)
-	_, err := resources.BuildBackendDeployment(stubAdapter{}, serviceWithCache("SharedPVC", false), runtimeFixture(), model())
-	g.Expect(err).To(HaveOccurred())
+	svc := serviceWithCache("SharedPVC", true)
+	storageClass := "rwx"
+	svc.Spec.Cache.StorageClassName = &storageClass
+
+	dep, err := resources.BuildBackendDeployment(stubAdapter{}, svc, runtimeFixture(), model())
+	g.Expect(err).NotTo(HaveOccurred())
+	container := servingContainer(dep.Spec.Template.Spec)
+	g.Expect(container.VolumeMounts).To(ContainElement(corev1.VolumeMount{
+		Name: "model-cache", MountPath: "/cache", ReadOnly: true,
+	}))
+	g.Expect(dep.Spec.Template.Spec.InitContainers).To(HaveLen(1))
+	g.Expect(dep.Spec.Template.Spec.InitContainers[0].Command).To(ContainElement(ContainSubstring(".noctaya-ready")))
+
+	pvc, err := resources.BuildCachePVC(svc)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(pvc.Spec.AccessModes).To(Equal([]corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany}))
+	g.Expect(pvc.Spec.StorageClassName).To(HaveValue(Equal(storageClass)))
+	g.Expect(pvc.Annotations).To(HaveKey(resources.CreateOnceHashAnnotation))
+
+	job, err := resources.BuildPrewarmJob(svc, runtimeFixture(), model())
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(job.Spec.Template.Spec.Containers[0].VolumeMounts[0].ReadOnly).To(BeFalse())
+	g.Expect(job.Spec.Template.Spec.Containers[0].Command).To(ContainElement(ContainSubstring(".noctaya-ready")))
+	g.Expect(job.Annotations).To(HaveKey(resources.CreateOnceHashAnnotation))
+}
+
+func TestSharedPVCWithoutPrewarmRemainsWritable(t *testing.T) {
+	g := NewWithT(t)
+	svc := serviceWithCache("SharedPVC", false)
+	dep, err := resources.BuildBackendDeployment(stubAdapter{}, svc, runtimeFixture(), model())
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(servingContainer(dep.Spec.Template.Spec).VolumeMounts).To(ContainElement(corev1.VolumeMount{
+		Name: "model-cache", MountPath: "/cache", ReadOnly: false,
+	}))
+	g.Expect(dep.Spec.Template.Spec.InitContainers).To(BeEmpty())
+}
+
+func TestOCIArtifactUsesIsolatedAuthenticatedPullAndReadOnlyServing(t *testing.T) {
+	g := NewWithT(t)
+	svc := serviceWithCache("SharedPVC", false)
+	resolved := backendruntime.ResolvedModel{
+		Path:          "/cache/oci/sha256-deadbeef",
+		Source:        "oci",
+		OCIReference:  "registry.example.com/models/qwen@sha256:" + strings.Repeat("a", 64),
+		OCISecretName: "registry-auth",
+		ReadyPath:     "/cache/oci/sha256-deadbeef/.noctaya-ready",
+	}
+
+	dep, err := resources.BuildBackendDeployment(stubAdapter{}, svc, runtimeFixture(), resolved)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(servingContainer(dep.Spec.Template.Spec).VolumeMounts).To(ContainElement(corev1.VolumeMount{
+		Name: "model-cache", MountPath: "/cache", ReadOnly: true,
+	}))
+	g.Expect(dep.Spec.Template.Spec.InitContainers).To(HaveLen(1))
+	g.Expect(dep.Spec.Template.Spec.InitContainers[0].Command).To(ContainElement(ContainSubstring(resolved.ReadyPath)))
+
+	job, err := resources.BuildPrewarmJob(svc, runtimeFixture(), resolved)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(job.Spec.Template.Spec.InitContainers).To(HaveLen(1))
+	puller := job.Spec.Template.Spec.InitContainers[0]
+	g.Expect(puller.Image).To(Equal("ghcr.io/oras-project/oras:v1.3.0"))
+	g.Expect(puller.Args).To(ContainElements(resolved.OCIReference, "--registry-config"))
+	g.Expect(strings.Join(puller.Args, " ")).NotTo(ContainSubstring("password"))
+	g.Expect(job.Spec.Template.Spec.Volumes).To(ContainElement(Satisfy(func(volume corev1.Volume) bool {
+		return volume.Secret != nil && volume.Secret.SecretName == "registry-auth"
+	})))
+	g.Expect(job.Spec.Template.Spec.Containers[0].Command).To(ContainElement(ContainSubstring("os.replace")))
+	g.Expect(job.Spec.Template.Spec.Containers[0].Command).To(ContainElement(ContainSubstring("symbolic links")))
+}
+
+func TestOCIArtifactRequiresPersistentCache(t *testing.T) {
+	g := NewWithT(t)
+	resolved := backendruntime.ResolvedModel{
+		Path:         "/cache/oci/model",
+		Source:       "oci",
+		OCIReference: "registry.example.com/m@sha256:" + strings.Repeat("a", 64),
+	}
+	_, err := resources.BuildPrewarmJob(serviceWithCache("None", false), runtimeFixture(), resolved)
+	g.Expect(err).To(MatchError(ContainSubstring("persistent cache")))
 }
 
 func TestBakedImageNotSupportedYet(t *testing.T) {

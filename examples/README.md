@@ -47,7 +47,10 @@ Supported model sources:
 |---|---|
 | `hf://<organization>/<model>` | Download from Hugging Face |
 | `modelscope://<organization>/<model>` | Download from ModelScope |
+| `oci://<registry>/<repository>@sha256:<digest>` | Stage an immutable OCI model artifact into a persistent cache |
 | `pvc://<claim>[/<subpath>]` | Mount pre-staged weights read-only; use `cache.strategy: None` |
+
+OCI references must use a digest, and the artifact root must contain the model files expected by the runtime. Use `NodeLocalPVC` or `SharedPVC`; the latter requires a StorageClass that provides `ReadWriteMany`. For a private registry, reference a `kubernetes.io/dockerconfigjson` Secret through `model.source.secretRef`. See the [CRD reference](../docs/crd.md#model-and-runtime) for delivery and cache constraints.
 
 For example, the A10 profile can serve DeepSeek-R1-Distill-Qwen-7B with these service fields:
 

@@ -41,6 +41,7 @@ The `LLMService` conditions have separate responsibilities:
 | `OOMKilled` | Degraded | Check memory limits, model size, and runtime settings |
 | `CrashLoopBackOff`, `ContainerRestarting` | Degraded | Inspect serving-container logs and the last termination reason |
 | `ProgressDeadlineExceeded` | Degraded | Inspect the Deployment rollout, Pods, and events |
+| `PrewarmFailed` | Degraded | Inspect the prewarm Job and registry/storage logs; delete the failed create-once Job after correcting the cause |
 
 Pod and Deployment changes trigger reconciliation through watches. Terminating and terminal Pods are ignored, and repeated observations of the same failure class do not rewrite status or emit duplicate events.
 
@@ -53,3 +54,5 @@ The `Degraded` and `Ready` condition reasons are controller observations. They m
 Correct the `LLMService`, `InferenceRuntime`, cluster capacity, or external dependency that caused the failure. The controller clears `Degraded` and returns the service to `Ready` when the backend recovers; recreating the `LLMService` is unnecessary.
 
 Noctaya does not diagnose vendor internals. Use Pod events, serving-container logs, and vendor tools for the underlying cause.
+
+For immutable cache drift, the controller names the existing PVC or Job and requires deliberate deletion. Preserve required PVC data first. For OCI delivery, inspect both `pull-oci-model` and `prewarm` containers; the backend will not consume a `.partial` directory without its readiness marker.

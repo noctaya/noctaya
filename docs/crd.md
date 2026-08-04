@@ -19,14 +19,14 @@ The schema requires `spec.model` and `spec.runtime`. Set exactly one model sourc
 
 | Field | Type | Default / constraint | Behavior |
 |---|---|---|---|
-| `spec.model.source.uri` | string | Required for reconciliation | Supports `hf://` (`huggingface://` alias), `modelscope://`, and `pvc://<claim>[/<subpath>]` |
+| `spec.model.source.uri` | string | Required for reconciliation | Supports `hf://` (`huggingface://` alias), `modelscope://`, digest-pinned `oci://<registry>/<repository>@sha256:<digest>`, and `pvc://<claim>[/<subpath>]` |
 | `spec.model.catalogRef` | string | **Not implemented** | Reserved for model-catalog lookup |
-| `spec.model.source.secretRef` | `LocalObjectReference` | **Not implemented** | Reserved for private-source credentials |
+| `spec.model.source.secretRef` | `LocalObjectReference` | Optional for `oci://` only | References a `kubernetes.io/dockerconfigjson` Secret in the service namespace |
 | `spec.runtime.name` | string | Exactly one runtime selection | Pins one cluster-scoped `InferenceRuntime` |
 | `spec.runtime.selector.vendor` | string array | Exactly one runtime selection; `nvidia` or `ascend` | Selects the first available vendor in order, then the highest-priority runtime |
 | `spec.runtime.argsOverride` | string array | Optional | Appends arguments after the runtime's templated arguments |
 
-A `pvc://` source mounts existing weights read-only at `/models` and performs no download. Use `cache.strategy: None` to avoid creating a separate cache PVC. Other URI schemes, including `oci://` and `s3://`, are not implemented.
+A `pvc://` source mounts existing weights read-only at `/models` and performs no download. Use `cache.strategy: None` to avoid creating a separate cache PVC. An `oci://` source must use an immutable SHA-256 digest and a persistent cache; Noctaya pulls its files with ORAS, rejects traversal and symbolic links, and exposes the cache path only after atomic promotion. The artifact filesystem root must contain the exact model directory expected by the runtime. Tags and `s3://` are not supported.
 
 ### Resources and scaling
 
@@ -54,10 +54,10 @@ Noctaya consumes existing mTLS credentials but does not issue or rotate them. Th
 
 | Field | Type | Default / constraint | Behavior |
 |---|---|---|---|
-| `spec.cache.strategy` | string | `NodeLocalPVC` | Implements `NodeLocalPVC`, `HostPath`, and `None`; `SharedPVC` and `BakedImage` are not implemented |
-| `spec.cache.size` | quantity | `50Gi` controller default | PVC request for `NodeLocalPVC` |
-| `spec.cache.storageClassName` | string | Cluster default | Selects the cache PVC StorageClass |
-| `spec.cache.prewarm` | boolean | `false` | Creates one download Job for `hf://` or `modelscope://` with a persistent cache |
+| `spec.cache.strategy` | string | `NodeLocalPVC` | Implements `NodeLocalPVC`, `SharedPVC`, `HostPath`, and `None`; `BakedImage` is not implemented |
+| `spec.cache.size` | quantity | `50Gi` controller default | PVC request for `NodeLocalPVC` or `SharedPVC` |
+| `spec.cache.storageClassName` | string | Cluster default | Selects the cache PVC StorageClass; `SharedPVC` requires `ReadWriteMany` support |
+| `spec.cache.prewarm` | boolean | `false` | Creates one download Job for a persistent hub cache; OCI sources always create a staging Job |
 | `spec.endpoint.openAICompatible` | boolean | `true` | Informational; the gateway currently always serves the OpenAI-compatible API |
 | `spec.endpoint.maxQueue` | integer | `100`; minimum `1` | Maximum admitted requests per gateway replica; overflow returns `429` with `Retry-After` |
 | `spec.endpoint.resources.requests.cpu` / `memory` | quantity | Optional | CPU and memory requested by each gateway replica |
@@ -68,7 +68,7 @@ Noctaya consumes existing mTLS credentials but does not issue or rotate them. Th
 | `spec.endpoint.coldStart.heartbeatInterval` | positive duration | `10s` | Keepalive heartbeat interval during activation |
 | `spec.imagePullSecrets` | `LocalObjectReference` array | Optional | Applied to backend, gateway, and prewarm Pods; Secrets must be in the service namespace |
 
-Cache PVCs and prewarm Jobs are create-once resources. Delete the Job to prewarm again; preserve needed data before replacing a PVC.
+Cache PVCs and prewarm Jobs are create-once resources carrying an immutable-spec hash. A changed size, StorageClass, source, or prewarm specification fails reconciliation instead of silently reusing incompatible state. Delete the Job to retry or prewarm again; preserve needed data before replacing a PVC. `SharedPVC` uses `ReadWriteMany`; its prewarm Job writes the cache while serving containers mount a completed cache read-only. Without prewarm, serving containers retain write access.
 
 Client authentication is opt-in. When configured, missing or invalid `Authorization: Bearer <key>` credentials on proxied inference routes return `401`. The gateway rereads the mounted Secret file per request, so projected Secret rotation does not recreate the `LLMService` or gateway Pods. `/healthz`, `/metrics`, and `/noctaya/queue` remain unauthenticated and require network isolation.
 
