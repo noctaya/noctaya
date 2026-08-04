@@ -42,7 +42,7 @@ A scale-to-zero report must show:
 7. An in-flight stream completes during backend termination within the configured drain timeout.
 8. Admission limits and activation failure behavior are observable and bounded.
 
-Release candidates must also follow the [release validation checklist](releases.md).
+Release candidates must also follow the [release checklist](../../CONTRIBUTING.md#release-checklist).
 
 ## Evidence to retain
 

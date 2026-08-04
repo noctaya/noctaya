@@ -61,17 +61,7 @@ The suite verifies:
 - allowed and denied traffic through the opt-in ingress `NetworkPolicy` profile;
 - KEDA External Push over mutual TLS, including rejection of a plaintext scaler client.
 
-CI runs the same lifecycle through `.github/workflows/test-e2e.yml`.
-
-## Run the release gate
-
-Use the last compatible published chart to validate upgrade, rollback, component replacement, and node recovery:
-
-```bash
-make test-release
-```
-
-The runner owns `noctaya-test-release`, refuses shared contexts, and writes its evidence to `bin/release-validation/` before cleanup. See [Release validation](validation/releases.md) for the complete release checklist and physical-accelerator requirement.
+CI runs the same lifecycle through `.github/workflows/test-e2e.yml`. Upgrade and rollback remain targeted release checks; follow the [contributor release checklist](../CONTRIBUTING.md#release-checklist).
 
 ## Use Podman
 
@@ -79,7 +69,6 @@ Select Podman for both the image build and the Kind provider:
 
 ```bash
 KIND_EXPERIMENTAL_PROVIDER=podman make test-e2e CONTAINER_TOOL=podman
-KIND_EXPERIMENTAL_PROVIDER=podman make test-release CONTAINER_TOOL=podman
 ```
 
 ## CPU vLLM stub

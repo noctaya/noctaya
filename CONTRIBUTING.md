@@ -60,8 +60,10 @@ Run the checks relevant to the completed change:
 | Go or controller behavior | `make test` and `make lint` |
 | Documentation or website | `make test-docs` |
 | Helm chart | `helm lint charts/noctaya` and `helm template noctaya charts/noctaya --namespace noctaya-system >/dev/null` |
-| KEDA activation or scale-down | `make test-e2e` |
-| Upgrade, rollback, or component recovery | `make test-release` |
+| KEDA lifecycle or component recovery | `make test-e2e` |
+| GitHub workflow YAML | `make verify-workflows` |
+| Go dependency security | `make vulncheck` |
+| Release candidate | Complete the [release checklist](#release-checklist) |
 
 The E2E runner owns an isolated Kind cluster and refuses to reuse an existing one. Never point it at development, staging, or production clusters. Most work can be tested without an accelerator; see [Developing without an accelerator](docs/no-gpu.md).
 
@@ -98,6 +100,17 @@ Physical validation must record the device and topology, driver and device-plugi
 runtime image, Noctaya version, commands, and results. Follow the
 [hardware validation requirements](docs/validation/requirements.md) and use an existing
 [device report](docs/validation/nvidia/a10.md) as a template.
+
+## Release checklist
+
+Before tagging a release:
+
+1. Update the chart `version` and `appVersion`, changelog, and current installation references.
+2. Run `make test`, `make lint`, `make vulncheck`, `make verify-workflows`, `make test-docs`, and `make test-e2e`.
+3. Run `helm lint charts/noctaya` and render the chart with `helm template`; inspect generated CRD and RBAC changes.
+4. Test the candidate over the supported previous release on a representative non-production cluster. Verify status, ownership, inference, scaling, recovery, and rollback compatibility; Helm does not roll back files under `crds/`.
+5. Run one representative physical-accelerator lifecycle with the exact candidate chart and images, then retain the versions, commands, timings, results, and limitations.
+6. Inspect `.github/workflows/release.yml` and verify the published checksums, signatures, image digests, SBOMs, and provenance after tagging.
 
 ## AI-assisted contributions
 
