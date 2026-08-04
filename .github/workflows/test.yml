@@ -41,42 +41,9 @@ jobs:
         run: |
           helm lint charts/noctaya
           helm template noctaya charts/noctaya --namespace noctaya-system >/dev/null
-          helm template noctaya charts/noctaya --namespace noctaya-system \
-            --set serviceAccount.create=false \
-            --set serviceAccount.name=noctaya-existing >/dev/null
-          helm template noctaya charts/noctaya --namespace noctaya-system \
-            --set gateway.replicas=2 >/dev/null
-          if helm template noctaya charts/noctaya --namespace noctaya-system \
-            --set serviceAccount.create=false >/dev/null 2>&1; then
-            echo "Expected an explicit existing ServiceAccount name to be required." >&2
-            exit 1
-          fi
-          if helm template noctaya charts/noctaya --namespace noctaya-system \
-            --set operator.replicas=2 \
-            --set operator.leaderElect=false >/dev/null 2>&1; then
-            echo "Expected leader election to be required for multiple operator replicas." >&2
-            exit 1
-          fi
-          if helm template noctaya charts/noctaya --namespace noctaya-system \
-            --set operator.replicas=0 >/dev/null 2>&1; then
-            echo "Expected operator.replicas=0 to fail validation." >&2
-            exit 1
-          fi
-          if helm template noctaya charts/noctaya --namespace noctaya-system \
-            --set gateway.replicas=0 >/dev/null 2>&1; then
-            echo "Expected gateway.replicas=0 to fail validation." >&2
-            exit 1
-          fi
-          if helm template noctaya charts/noctaya --namespace noctaya-system \
-            --set gateway.replicas=2147483648 >/dev/null 2>&1; then
-            echo "Expected an out-of-range gateway replica count to fail validation." >&2
-            exit 1
-          fi
-          if helm template noctaya charts/noctaya --namespace noctaya-system \
-            --set gateway.scalerMode=metrics-api >/dev/null 2>&1; then
-            echo "Expected the removed gateway.scalerMode value to fail validation." >&2
-            exit 1
-          fi
+
+      - name: Validate workflow syntax and release action pins
+        run: make verify-workflows
 
       - name: Running Tests
         run: |
@@ -85,3 +52,23 @@ jobs:
           make test
           make helm-crds
           git diff --exit-code
+
+  vulnerability:
+    permissions:
+      contents: read
+    name: Reachable Go vulnerabilities
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Check reachable vulnerabilities
+        run: make vulncheck

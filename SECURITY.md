@@ -27,6 +27,12 @@ security impact. If ownership is unclear, report privately here and we will help
 Client API-key authentication is optional and disabled by default for compatibility. Configure `spec.endpoint.authentication` and apply NetworkPolicy before exposing a gateway beyond a trusted namespace. Gateway health, metrics, and queue endpoints remain unauthenticated for probes and
 monitoring. See [Optional traffic security](https://github.com/noctaya/noctaya/tree/main/examples/security).
 
+## Release integrity
+
+Official release image indexes are published by `.github/workflows/release.yml` with BuildKit SBOM and provenance attestations and keyless Sigstore signatures. The Helm archive is checksummed and accompanied by a Sigstore bundle. Check `checksums.txt`, compare the recorded image digests, and use Cosign 3 to verify the exact release-workflow identity and GitHub OIDC issuer before deployment.
+
+Release workflow actions are pinned to reviewed commit SHAs, and CI rejects mutable references from returning. No long-lived signing key is stored in the repository.
+
 ## Response
 
 - We aim to acknowledge reports within **3 business days**, provide an initial assessment within

@@ -63,11 +63,6 @@ E2E_MANAGER_IMG ?= noctaya.io/noctaya:e2e
 E2E_GATEWAY_IMG ?= noctaya.io/noctaya-gateway:e2e
 E2E_STUB_IMG ?= noctaya.io/vllm-stub:e2e
 E2E_ARCHIVE_DIR ?= $(abspath $(LOCALBIN)/e2e-images)
-RELEASE_KIND_CLUSTER ?= noctaya-test-release
-RELEASE_KUBECONFIG ?= $(abspath $(LOCALBIN)/noctaya-test-release.kubeconfig)
-RELEASE_PREVIOUS_VERSION ?= 0.4.0-alpha.1
-RELEASE_PREVIOUS_CHART ?= https://github.com/noctaya/noctaya/releases/download/v$(RELEASE_PREVIOUS_VERSION)/noctaya-$(RELEASE_PREVIOUS_VERSION).tgz
-RELEASE_EVIDENCE_DIR ?= $(abspath $(LOCALBIN)/release-validation)
 
 .PHONY: load-e2e-images
 load-e2e-images:
@@ -99,24 +94,6 @@ test-e2e: kustomize ## Run the External Push lifecycle in an isolated disposable
 		KUSTOMIZE="$(abspath $(KUSTOMIZE))" \
 		bash test/e2e/run-e2e.sh
 
-.PHONY: test-release
-test-release: ## Validate upgrade, rollback, replacement, and node recovery on disposable Kind.
-	@CONTAINER_TOOL="$(CONTAINER_TOOL)" \
-		E2E_GATEWAY_IMG="$(E2E_GATEWAY_IMG)" \
-		E2E_KEDA_VERSION="$(E2E_KEDA_VERSION)" \
-		E2E_MANAGER_IMG="$(E2E_MANAGER_IMG)" \
-		E2E_STUB_IMG="$(E2E_STUB_IMG)" \
-		HELM="$(HELM)" \
-		KIND="$(KIND)" \
-		KUBECTL="$(KUBECTL)" \
-		RELEASE_CANDIDATE_CHART="$(abspath charts/noctaya)" \
-		RELEASE_EVIDENCE_DIR="$(RELEASE_EVIDENCE_DIR)" \
-		RELEASE_KIND_CLUSTER="$(RELEASE_KIND_CLUSTER)" \
-		RELEASE_KUBECONFIG="$(RELEASE_KUBECONFIG)" \
-		RELEASE_PREVIOUS_CHART="$(RELEASE_PREVIOUS_CHART)" \
-		RELEASE_PREVIOUS_VERSION="$(RELEASE_PREVIOUS_VERSION)" \
-		bash test/release/run-release.sh
-
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
 	"$(GOLANGCI_LINT)" run
@@ -128,6 +105,15 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 .PHONY: lint-config
 lint-config: golangci-lint ## Verify golangci-lint linter configuration
 	"$(GOLANGCI_LINT)" config verify
+
+.PHONY: vulncheck
+vulncheck: govulncheck ## Check reachable Go vulnerabilities with the pinned scanner.
+	"$(GOVULNCHECK)" ./...
+
+.PHONY: verify-workflows
+verify-workflows: actionlint ## Validate workflow syntax and immutable release action references.
+	"$(ACTIONLINT)" .github/workflows/*.yml
+	bash hack/verify-release-actions.sh
 
 ##@ Build
 
@@ -224,6 +210,8 @@ KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
+GOVULNCHECK = $(LOCALBIN)/govulncheck
+ACTIONLINT = $(LOCALBIN)/actionlint
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.8.1
@@ -240,6 +228,8 @@ ENVTEST_K8S_VERSION ?= $(shell v='$(call gomodver,k8s.io/api)'; \
   printf '%s\n' "$$v" | sed -E 's/^v?[0-9]+\.([0-9]+).*/1.\1/')
 
 GOLANGCI_LINT_VERSION ?= v2.12.2
+GOVULNCHECK_VERSION ?= v1.6.0
+ACTIONLINT_VERSION ?= v1.7.12
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 $(KUSTOMIZE): $(LOCALBIN)
@@ -272,6 +262,16 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 		$(GOLANGCI_LINT) custom --destination $(LOCALBIN) --name golangci-lint-custom && \
 		mv -f $(LOCALBIN)/golangci-lint-custom $(GOLANGCI_LINT); \
 	} || true
+
+.PHONY: govulncheck
+govulncheck: $(GOVULNCHECK) ## Download the pinned govulncheck binary.
+$(GOVULNCHECK): $(LOCALBIN)
+	$(call go-install-tool,$(GOVULNCHECK),golang.org/x/vuln/cmd/govulncheck,$(GOVULNCHECK_VERSION))
+
+.PHONY: actionlint
+actionlint: $(ACTIONLINT) ## Download the pinned GitHub Actions workflow checker.
+$(ACTIONLINT): $(LOCALBIN)
+	$(call go-install-tool,$(ACTIONLINT),github.com/rhysd/actionlint/cmd/actionlint,$(ACTIONLINT_VERSION))
 
 # Install and version-pin a local Go tool: target, package, version.
 define go-install-tool

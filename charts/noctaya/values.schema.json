@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["image", "operator", "gateway", "serviceAccount"],
+  "properties": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registry", "operator", "gateway", "tag", "pullPolicy"],
+      "properties": {
+        "registry": {"type": "string", "minLength": 1},
+        "operator": {"type": "string", "minLength": 1},
+        "gateway": {"type": "string", "minLength": 1},
+        "tag": {"type": "string"},
+        "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]}
+      }
+    },
+    "operator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["replicas", "leaderElect", "resources"],
+      "properties": {
+        "replicas": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+        "leaderElect": {"type": "boolean"},
+        "resources": {"$ref": "#/definitions/resources"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"replicas": {"minimum": 2}}},
+          "then": {"properties": {"leaderElect": {"const": true}}}
+        }
+      ]
+    },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["replicas"],
+      "properties": {
+        "replicas": {"type": "integer", "minimum": 1, "maximum": 2147483647}
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["create", "name"],
+      "properties": {
+        "create": {"type": "boolean"},
+        "name": {"type": "string"}
+      }
+    },
+    "nameOverride": {"type": "string"}
+  },
+  "definitions": {
+    "quantity": {
+      "type": "string",
+      "pattern": "^[+-]?([0-9]+(\\.[0-9]+)?|\\.[0-9]+)([eE][+-]?[0-9]+|[EPTGMK]i?|[mun])?$"
+    },
+    "resourceList": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cpu": {"$ref": "#/definitions/quantity"},
+        "memory": {"$ref": "#/definitions/quantity"}
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["limits", "requests"],
+      "properties": {
+        "limits": {"$ref": "#/definitions/resourceList"},
+        "requests": {"$ref": "#/definitions/resourceList"}
+      }
+    }
+  }
+}
